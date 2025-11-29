@@ -26,4 +26,4 @@ Napisz programy symulujące działanie dyspozytora, pracowników i ciężarówek
 symulacji zapisać w pliku (plikach) tekstowym.
 
 # Link do repozytorium
-`https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej.`
+[https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej.]
