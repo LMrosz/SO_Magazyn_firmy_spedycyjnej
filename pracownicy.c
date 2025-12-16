@@ -3,30 +3,74 @@
 
 
 int main(int argc, char *argv[]) {
+	srand(time(NULL) ^ getpid()); //uzyskanie unikalnego ziarna XOR z pidem
+	
+	if (argc < 5) {
+        fprintf(stderr, "Uzycie: %s id shmid_magazyn semafor shmid_tasma\n", argv[0]);
+        return 1;
+    }
+
+
 	int id_pracownik = atoi(argv[1]);
-	int shmid = atoi(argv[2]);
-	semafor = atoi(argv[3]);
-	Magazyn_wspolny *wspolny = (Magazyn_wspolny *)shmat(shmid, NULL, 0);
+	int shmid_magazyn = atoi(argv[2]);
+	int semafor = atoi(argv[3]);
+	int shmid_tasma = atoi(argv[4]);
+
+	Magazyn_wspolny *wspolny = (Magazyn_wspolny *)shmat(shmid_magazyn, NULL, 0);
 	if( wspolny == (Magazyn_wspolny *)(-1)){
-                printf("Blad dostepu do pamieci dzielonej\n");
+                perror("Blad dostepu do pamieci dzielonej magazynu\n");
                 return 1;
-        }
+    }
+
+	Tasma *tasma = (Tasma *)shmat(shmid_tasma, NULL, 0);
+	if( tasma == (Tasma *)(-1)){
+                perror("Blad dostepu do pamieci dzielonej tasmy\n");
+                return 1;
+    }
+
+	int proby_pustego_magazynu = 0;
+    const int MAX_PROB = 3;
+
 	while(1){
-                semafor_p(0);
-                if(wspolny->liczba_paczek>0){
-                        Paczka paczka = wspolny -> magazyn[wspolny -> liczba_paczek-1];
-                        wspolny -> liczba_paczek = wspolny -> liczba_paczek - 1;
-                        printf("Pracownik %d pobrał paczke: %d, zostało %d paczek\n",id_pracownik + 1, paczka.id,wspolny -> liczba_paczek);
-                        semafor_v(0);
-                        sleep(5);
-			//pozniej dodac tu implementacje komunikacji z ciezarowka
-                }
-                else{
-                        printf("Brak paczek w magazynie, pracownik %d czeka na nowe paczki\n",id_pracownik+1);
-                        semafor_v(0);
-                        sleep(30);
-			break;
+            semafor_p(semafor, 0);
+            if(wspolny->liczba_paczek>0){
+                Paczka paczka = wspolny -> magazyn[wspolny -> liczba_paczek-1];
+                wspolny -> liczba_paczek--;
+                printf("Pracownik %d pobrał paczke %d (Waga: %.2f). Pozostalo w magazynie: %d\n",
+                id_pracownik, paczka.id, paczka.waga, wspolny->liczba_paczek);
+                semafor_v(semafor, 0);
+				semafor_p(semafor, 2);
+				semafor_p(semafor, 1);
+				while ((tasma->aktualna_waga + paczka.waga) > tasma->max_waga) {
+                	printf("Pracownik %d: Tasma przeciazona (%.2f/%.d kg), czekam...\n",id_pracownik, tasma->aktualna_waga, tasma->max_waga);
+                	semafor_v(semafor, 1);
+                	semafor_v(semafor, 2);
+                	usleep(500000);
+                	semafor_p(semafor, 2);
+                	semafor_p(semafor, 1);
+            	}
+
+				tasma -> bufor[tasma -> head] = paczka;
+				tasma -> head = (tasma -> head + 1) % tasma -> max_pojemnosc;
+				tasma -> aktualna_ilosc++;
+				tasma -> aktualna_waga += paczka.waga;
+
+				printf("Pracownik %d polozyl paczke %d na tasmie. (Tasma: %d szt, %.2f kg)\n",
+                id_pracownik, paczka.id, tasma->aktualna_ilosc, tasma->aktualna_waga);
+				semafor_v(semafor, 1);
+				semafor_v(semafor, 3);
+				} else {
+                	semafor_v(semafor, 0);
+            		proby_pustego_magazynu++;
+            		printf("Pracownik %d: Magazyn pusty (proba %d/%d)\n", id_pracownik, proby_pustego_magazynu, MAX_PROB);
+            		if (proby_pustego_magazynu >= MAX_PROB) {
+                		printf("Pracownik %d: Koncze prace.\n", id_pracownik);
+                		break;
+            		}
+            		sleep(5);
                 }
         }
+	shmdt(wspolny);
+	shmdt(tasma);
 return 0;
 }

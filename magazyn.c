@@ -1,92 +1,207 @@
+/*
+TO DO:
+przygotowac funkcje zwracajace klucze, tworzace pamiec dzielona etc
+dodac generowanie paczek w trakcie trwania symulacji
+poprawic dostep do tasmy ciezarowce - tylko jedna przy tasmie
+dodac sygnaly
+P4 i paczki express
+Poprawić indeksowanie pracowników
+poprawic komunikat zamykania semafora
+*/
 //plik magazyn.c
-#include <stdio.h>
+
 #include "utils.h"
 
-int main() {
+int g_id_magazyn = -1;
+int g_id_tasma = -1;
+int g_semafor = -1;
+Magazyn_wspolny *g_wspolny = NULL;
+Tasma *g_tasma = NULL;
+
+void cleanup(void){
+    if (g_wspolny && g_wspolny != (void*)-1) shmdt(g_wspolny);
+    if (g_tasma && g_tasma != (void*)-1) shmdt(g_tasma);
+    if (g_id_magazyn != -1) shmctl(g_id_magazyn, IPC_RMID, NULL);
+    if (g_id_tasma != -1) shmctl(g_id_tasma, IPC_RMID, NULL);
+    if (g_semafor != -1) usun_semafor(g_semafor);
+}
+
+void handle_sigint(int sig){
+    (void)sig;
+    const char msg[] = "\nSIGINT - sprzatam...\n";
+    write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+    cleanup();
+    kill(0, SIGTERM);
+    _exit(0);
+}
+
+int main(){
 	srand(time(NULL));
+
+	struct sigaction sa; //ustawienie handlera od sygnalow
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
+
 	int liczba_paczek = 0;
-	//generowanie danych dla paczek
-	Paczka* magazyn = generuj_paczke(&liczba_paczek);
-	//generowanie danych dla ciezarowek
-	int min_ciezarowek = 1;
-	int max_ciezarowek = 50;
-	int liczba_ciezarowek = losuj(min_ciezarowek, max_ciezarowek);
+	int liczba_ciezarowek = 0;
 
-	int min_waga_c = 500;
-	int max_waga_c = 20000;
-	int waga_ciezarowka = losuj(min_waga_c, max_waga_c);
+	Paczka* magazyn = generuj_paczke(&liczba_paczek);//generowanie danych dla paczek
+	Ciezarowka* ciezarowki = generuj_ciezarowke(&liczba_ciezarowek);//generowanie danych dla ciezarowek
+	if (!magazyn || !ciezarowki) {
+        fprintf(stderr, "Blad generowania danych ciezarowki lub magazynu\n");
+        free(magazyn);
+        free(ciezarowki);
+        return 1;
+    }
 
-	int min_v_ciezarowki = 10;
-	int max_v_ciezarowki = 100;
-	int pojemnosc_ciezarowki = losuj(min_v_ciezarowki, max_v_ciezarowki);
+	pid_t pracownicy_pids[3];//pozniej dac na 4 bo P4 
+	pid_t *ciezarowki_pids = malloc(liczba_ciezarowek * sizeof(pid_t));
+    if (!ciezarowki_pids) {
+        perror("malloc pids");
+        free(magazyn);
+        free(ciezarowki);
+        return 1;
+    }
 
-	time_t min_czas_ciezarowki = 10;
-	time_t max_czas_ciezarowki = 50;
-	time_t czas_ciezarowki = losuj(min_czas_ciezarowki, max_czas_ciezarowki);
+	g_semafor = utworz_nowy_semafor();
+	ustaw_semafor(g_semafor,0,1); //dostep do magazynu
+	ustaw_semafor(g_semafor,1,1); //dostep do tasmy
+	ustaw_semafor(g_semafor,3,0); //liczba paczek na tasmie
 
-	//generowanie danych dla tasmy
-	int min_liczba_paczek_tasma = 3;
-	int max_liczba_paczek_tasma = 30;
-	int liczba_paczek_tasma = losuj(min_liczba_paczek_tasma, max_liczba_paczek_tasma);
+	key_t klucz_magazyn = ftok(".",'M');//TODO zmienic wartosc
+	key_t klucz_tasma = ftok(".",'T');
+	if (klucz_magazyn == -1 || klucz_tasma == -1) {
+        perror("ftok");
+        free(magazyn);
+        free(ciezarowki);
+        free(ciezarowki_pids);
+        cleanup();
+        return 1;
+    }
 
-	int min_waga_tasma = 25;
-	int max_waga_tasma = 250;
-	int waga_tasma = losuj(min_waga_tasma, max_waga_tasma);
+	g_id_magazyn = shmget(klucz_magazyn, sizeof(Magazyn_wspolny), IPC_CREAT | 0600);
+	if (g_id_magazyn == -1) {
+        perror("shmget magazyn");
+        free(magazyn);
+        free(ciezarowki);
+        free(ciezarowki_pids);
+        cleanup();
+        return 1;
+    }
+	
+	g_wspolny = (Magazyn_wspolny *)shmat(g_id_magazyn, NULL, 0);
+	if (g_wspolny == (Magazyn_wspolny *)(-1)) {
+        perror("shmat magazyn");
+        free(magazyn);
+        free(ciezarowki);
+        free(ciezarowki_pids);
+        cleanup();
+        return 1;
+    }
 
-	printf("\n-------------GENEROWANIE CIEZAROWEK-------------\n");
-	printf("Liczba ciezarowek wynosi: %d\n", liczba_ciezarowek);
-	printf("Dopuszczalna waga ladunku wynosi: %d kg\n", waga_ciezarowka);
-	printf("Dopuszczalna objetosc ladunku: %d m^3\n", pojemnosc_ciezarowki);
-	printf("Czas rozwozu paczek dla ciezarowki wynosi: %ld s\n",czas_ciezarowki);
+	g_id_tasma = shmget(klucz_tasma, sizeof(Tasma), IPC_CREAT | 0600);
+    if (g_id_tasma == -1) {
+        perror("shmget tasma");
+        free(magazyn);
+        free(ciezarowki);
+        free(ciezarowki_pids);
+        cleanup();
+        return 1;
+    }
+	
+	g_tasma = (Tasma *)shmat(g_id_tasma, NULL, 0);
+    if (g_tasma == (Tasma *)(-1)) {
+        perror("shmat tasma");
+        free(magazyn);
+        free(ciezarowki);
+        free(ciezarowki_pids);
+        cleanup();
+        return 1;
+    }
 
-	printf("\n-------------GENEROWANIE TASMY-------------\n");
-	printf("Maksymalna liczba paczek na tasmie: %d\n", liczba_paczek_tasma);
-	printf("Maksymalny udzwig tasmy: %d kg\n",waga_tasma);
-	utworz_nowy_semafor();
-	ustaw_semafor(0);
-	key_t klucz = ftok(".",'p');
-	if( klucz == -1){
-		printf("Blad utworzenia klucza\n");
-		return 1;
+	generuj_tasme(g_tasma);
+	ustaw_semafor(g_semafor,2,g_tasma -> max_pojemnosc);
+	g_wspolny -> liczba_paczek = liczba_paczek;
+	for(int i = 0; i<liczba_paczek;i++){
+		g_wspolny -> magazyn[i] = magazyn[i];
 	}
-	int id = shmget(klucz, sizeof(Magazyn_wspolny), IPC_CREAT | 0600);
-	Magazyn_wspolny *wspolny = (Magazyn_wspolny *)shmat(id, NULL, 0);
-	if( wspolny == (Magazyn_wspolny *)(-1)){
-                printf("Blad dostepu do pamieci dzielonej\n");
-                return 1;
-        }
+	free(magazyn);
+	magazyn = NULL;
+
 	char arg_id[10];
 	char arg_shm[20];
 	char arg_sem[20];
-
-	semafor_p(0);
-	wspolny -> liczba_paczek = liczba_paczek;
-	for(int i = 0; i<liczba_paczek;i++){
-		wspolny -> magazyn[i] = magazyn[i];
-	}
-	semafor_v(0);
-
+	char arg_shm_tasma[20];
+    char arg_weight[20];
+	char arg_volume[20];
+	char arg_time[10];
+	
 	for (int i = 0; i < 3; i++) {
  		pid_t pid = fork();
 		if (pid == 0) {
-		sprintf(arg_id, "%d", i);
-        	sprintf(arg_shm, "%d", id);
-       		sprintf(arg_sem, "%d", semafor);
-        	execl("./pracownicy","pracownicy", arg_id, arg_shm, arg_sem,NULL);
-		exit(0);
-    		}
-		else{
-			printf("Zatrudniłem pracownika %d o PID = %d\n", i, pid);
+			sprintf(arg_id, "%d", i+1);
+        	sprintf(arg_shm, "%d", g_id_magazyn);
+       		sprintf(arg_sem, "%d", g_semafor);
+			sprintf(arg_shm_tasma, "%d", g_id_tasma);
+        	execl("./pracownicy","pracownicy", arg_id, arg_shm, arg_sem,arg_shm_tasma,NULL);
+			exit(0);
+    	} else if (pid >0) {
+			pracownicy_pids[i] = pid;
+			printf("Zatrudniłem pracownika %d o PID = %d\n", i+1, pid);
+		} else {
+			perror("fork pracownik");
 		}
 	}
-	wait(NULL);
-	wait(NULL);
-	wait(NULL);
-	printf("Pracownicy zakonczyli swoja prace\n");
-	usun_semafor();
-    	shmdt(wspolny);//obsluzyc blad
-    	shmctl(id, IPC_RMID, NULL);//obsluzyc blad
-	free(magazyn);
-	magazyn = NULL;
+
+	for (int i = 0; i < liczba_ciezarowek; i++) {
+                pid_t pid = fork();
+                if (pid == 0) {
+                	sprintf(arg_id, "%d", ciezarowki[i].id_ciezarowki);
+                	sprintf(arg_shm_tasma, "%d", g_id_tasma);
+					sprintf(arg_sem, "%d", g_semafor);
+                	sprintf(arg_weight, "%d", ciezarowki[i].waga_ciezarowki);
+                	sprintf(arg_volume, "%d", ciezarowki[i].pojemnosc_ciezarowki);
+					sprintf(arg_time, "%ld",  ciezarowki[i].czas_rozwozu);
+                	execl("./ciezarowki","ciezarowki", arg_id, arg_shm_tasma, arg_sem,arg_weight,arg_volume,arg_time,NULL);
+                	exit(0);
+                } else if (pid > 0 ){
+					printf("Stworzono ciezarowke %d, PID = %d\n", ciezarowki[i].id_ciezarowki, pid);
+				} else {
+                    perror("fork ciezarowka");
+                }
+        }
+
+	for (int i = 0; i < 3; i++) {
+                waitpid(pracownicy_pids[i], NULL, 0);
+                printf("Pracownik %d zakonczyl swoja prace\n", i+1);
+        }
+
+	//tymczasowe usuwanie ciezarowek
+	printf("Rozpoczynam procedure zamykania systemu (wysylam trutki)...\n");
+	for (int i = 0; i < liczba_ciezarowek; i++) {
+        semafor_p(g_semafor, 2);
+        semafor_p(g_semafor, 1);
+        
+        g_tasma->bufor[g_tasma->head].id = -1;
+        g_tasma->bufor[g_tasma->head].waga = -1;
+        g_tasma->head = (g_tasma->head + 1) % g_tasma->max_pojemnosc;
+        g_tasma->aktualna_ilosc++;
+
+        semafor_v(g_semafor, 1);
+        semafor_v(g_semafor, 3);
+    }
+
+	for (int i = 0; i < liczba_ciezarowek; i++) {
+        waitpid(ciezarowki_pids[i], NULL, 0);
+        printf("Ciezarowka %d zakonczyla prace.\n", i + 1);
+    }
+    cleanup();
+    free(ciezarowki);
+    free(ciezarowki_pids);
+
+    printf("\n\n\n Symulacja zakonczyla sie poprawnie\n");
 return 0;
 }

@@ -1,11 +1,20 @@
-magazyn: magazyn.c dyspozytor.o pracownicy.o ciezarowki.o
-	gcc magazyn.c -o magazyn -lm
+CC = gcc
+CFLAGS = -Wall -Wextra -g
+LDFLAGS = -lm
 
-dyspozytor.o: dyspozytor.c utils.h
-	gcc dyspozytor.c -o dyspozytor
+all: magazyn pracownicy ciezarowki
 
-pracownicy.o: pracownicy.c
-	gcc pracownicy.c -o pracownicy -lm
+magazyn: magazyn.c utils.c utils.h
+	$(CC) $(CFLAGS) -o magazyn magazyn.c utils.c $(LDFLAGS)
 
-ciezarowki.o: ciezarowki.c
-	gcc ciezarowki.c -o ciezarowki
+pracownicy: pracownicy.c utils.c utils.h
+	$(CC) $(CFLAGS) -o pracownicy pracownicy.c utils.c $(LDFLAGS)
+
+ciezarowki: ciezarowki.c utils.c utils.h
+	$(CC) $(CFLAGS) -o ciezarowki ciezarowki.c utils.c $(LDFLAGS)
+
+clean:
+	rm -f magazyn pracownicy ciezarowki
+	ipcrm -a 2>/dev/null || true
+
+.PHONY: all clean
