@@ -1,0 +1,13 @@
+#Pliki wykonywalne
+*.exe
+*.out
+*.app
+
+*.o
+
+.vscode
+magazyn
+pracownicy
+ciezarowki
+dyspozytor
+
