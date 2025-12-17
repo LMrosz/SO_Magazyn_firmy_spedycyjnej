@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
                 	printf("Pracownik %d: Tasma przeciazona (%.2f/%.d kg), czekam...\n",id_pracownik, tasma->aktualna_waga, tasma->max_waga);
                 	semafor_v(semafor, 1);
                 	semafor_v(semafor, 2);
-                	usleep(500000);
+                	sleep(1);
                 	semafor_p(semafor, 2);
                 	semafor_p(semafor, 1);
             	}

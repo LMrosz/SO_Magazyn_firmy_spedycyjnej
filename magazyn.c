@@ -1,15 +1,4 @@
-/*
-TO DO:
-przygotowac funkcje zwracajace klucze, tworzace pamiec dzielona etc
-dodac generowanie paczek w trakcie trwania symulacji
-poprawic dostep do tasmy ciezarowce - tylko jedna przy tasmie
-dodac sygnaly
-P4 i paczki express
-Poprawić indeksowanie pracowników
-poprawic komunikat zamykania semafora
-*/
-//plik magazyn.c
-
+//plik magazyn.c - main
 #include "utils.h"
 
 int g_id_magazyn = -1;
@@ -67,11 +56,12 @@ int main(){
     }
 
 	g_semafor = utworz_nowy_semafor();
-	ustaw_semafor(g_semafor,0,1); //dostep do magazynu
-	ustaw_semafor(g_semafor,1,1); //dostep do tasmy
-	ustaw_semafor(g_semafor,3,0); //liczba paczek na tasmie
+	ustaw_semafor(g_semafor,0,1); 
+	ustaw_semafor(g_semafor,1,1); 
+	ustaw_semafor(g_semafor,3,0);
+    ustaw_semafor(g_semafor,4,1); 
 
-	key_t klucz_magazyn = ftok(".",'M');//TODO zmienic wartosc
+	key_t klucz_magazyn = ftok(".",'M');
 	key_t klucz_tasma = ftok(".",'T');
 	if (klucz_magazyn == -1 || klucz_tasma == -1) {
         perror("ftok");

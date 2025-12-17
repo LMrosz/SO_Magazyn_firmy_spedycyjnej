@@ -6,6 +6,7 @@
 	1 - dostep do tasmy (mutex)
 	2 - licznik wolnych miejsc (liczenie w dol)
 	3 - licznik paczek na tasmie (liczenie w gore)
+    4 - dostep do tasmy ciezarowek (mutex)
 */
 
 int utworz_nowy_semafor(void){
@@ -14,7 +15,7 @@ int utworz_nowy_semafor(void){
         perror("ftok semafor");
         exit(EXIT_FAILURE);
     }
-    int sem=semget(klucz,4,0600|IPC_CREAT);
+    int sem=semget(klucz,5,0600|IPC_CREAT);
     if (sem==-1){
         printf("Nie moglem utworzyc nowego semafora.\n");
         perror("semget");
@@ -62,7 +63,7 @@ void semafor_v(int sem_id, int nr){
 //GENERATORY
 
 Paczka* generuj_paczke(int *liczba_paczek_out){
-    int liczba_paczek = losuj(3, 100);
+    int liczba_paczek = 1000; //losuj(3, 100);
     double waga_paczek = 0;
     int liczba_paczek_zwyklych = 0;
 
@@ -159,7 +160,7 @@ void generuj_tasme(Tasma* tasma) {
     tasma->tail = 0;
     tasma->aktualna_ilosc = 0;
     tasma->aktualna_waga = 0;
-    tasma->max_pojemnosc = losuj(1, MAX_POJEMNOSC_FIZYCZNA_TASMY);
+    tasma->max_pojemnosc = MAX_POJEMNOSC_FIZYCZNA_TASMY;//losuj(1, MAX_POJEMNOSC_FIZYCZNA_TASMY);
     tasma->max_waga = losuj(30, 300);
 
     printf("\n-------------GENEROWANIE TASMY-------------\n");
@@ -168,9 +169,9 @@ void generuj_tasme(Tasma* tasma) {
 }
 
 Ciezarowka* generuj_ciezarowke(int *liczba_ciezarowek_out) {
-    int liczba_ciezarowek = losuj(1, 5);
-    int waga_ciezarowki = losuj(100, 500);
-    int pojemnosc_ciezarowki = losuj(10, 100);
+    int liczba_ciezarowek = 10;//losuj(1,10);
+    int waga_ciezarowki = losuj(100, 1000);
+    int pojemnosc_ciezarowki = 40;//losuj(10, 100);
     time_t czas_ciezarowki = losuj(10, 50);
 
     Ciezarowka *ciezarowki = (Ciezarowka*)malloc(liczba_ciezarowek * sizeof(Ciezarowka));

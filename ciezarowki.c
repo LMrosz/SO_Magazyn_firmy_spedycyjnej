@@ -25,11 +25,13 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     while(1){
+        semafor_p(semafor, 4); // zablokowanie dostepu do tasmy innym ciezarowkom
 		semafor_p(semafor, 3);
 		semafor_p(semafor, 1);
 		if (tasma->aktualna_ilosc == 0) {
             semafor_v(semafor, 1);
             semafor_v(semafor, 3);
+            semafor_v(semafor, 4);
             usleep(100000);
             continue;
         }
@@ -40,6 +42,7 @@ int main(int argc, char *argv[]) {
             tasma->aktualna_ilosc--;
             semafor_v(semafor, 2);
             semafor_v(semafor, 1);
+            semafor_v(semafor, 4);
             printf("Ciezarowka %d: Otrzymano sygnal zakonczenia.\n", id_ciezarowki);
             break;
         }
@@ -58,9 +61,9 @@ int main(int argc, char *argv[]) {
 			
 			semafor_v(semafor, 2);
             semafor_v(semafor, 1);
-			//semafor_v(3);
+            semafor_v(semafor, 4);
 		} else if (liczba_paczek_c == 0) {
-            // Pusta ciężarówka nie może zabrać paczki - usuń ją
+            // Pusta ciezarowka nie moze zabrac paczki - testy - nie powinno dojsc do takiej sytulacji
             printf("Ciezarowka %d: Paczka %d (%.2f kg) za duza - USUNIETA!\n",
                    id_ciezarowki, aktualna_paczka.id, aktualna_paczka.waga);
             
@@ -70,11 +73,13 @@ int main(int argc, char *argv[]) {
             
             semafor_v(semafor, 2);
             semafor_v(semafor, 1);
+            semafor_v(semafor, 4);
             
         } else {
-            // Ciężarówka pełna - jedzie rozwozić
+            // Ciężarówka pełna
             semafor_v(semafor, 1);
-            semafor_v(semafor, 3);  // "oddaj" sygnał, nie zabraliśmy paczki
+            semafor_v(semafor, 3);
+            semafor_v(semafor, 4);
             
             printf("Ciezarowka %d PELNA (%.2f/%d kg, %d paczek). Odjezdza na %ld s.\n",
                    id_ciezarowki, waga, dopuszczalna_waga, liczba_paczek_c, czas_rozwozu);
