@@ -15,6 +15,8 @@
 #include <stdbool.h>
 #include <signal.h>
 #include <string.h>
+#include <fcntl.h>
+#include <stdarg.h>
 
 #define VOL_A 0.019456
 #define VOL_B 0.046208
@@ -23,9 +25,15 @@
 #define MAX_PACZEK 18000
 #define MAX_POJEMNOSC_FIZYCZNA_TASMY 50
 #define LICZBA_PRACOWNIKOW 3
+#define MAX_NAZWA_PLIKU 64
+#define MAX_LOG_BUFOR 1024
+
+//ZMIENNE GLOBALNE
+extern int g_fd_wyniki;
+extern int g_semafor_log;
+extern char g_nazwa_pliku[MAX_NAZWA_PLIKU];
 
 //TYPY I STRUKTURY
-
 typedef enum { A, B, C } TypPaczki;
 typedef enum { ZWYKLA, EXPRES } Priorytet;
 
@@ -61,7 +69,6 @@ typedef struct {
 } Tasma;
 
 //FUNKCJE INLINE
-
 static inline int losuj(int min, int max) {
     if (min > max) return min;
     return rand() % (max - min + 1) + min;
@@ -110,4 +117,8 @@ Paczka* generuj_paczke(int *liczba_paczek_out);
 Ciezarowka* generuj_ciezarowke(int *liczba_ciezarowek_out);
 void generuj_tasme(Tasma* tasma);
 
+//Obsługa plikow
+int otworz_plik_wyniki(int semafor);
+void zamknij_plik_wyniki(void);
+void logi(const char *format, ...); 
 #endif

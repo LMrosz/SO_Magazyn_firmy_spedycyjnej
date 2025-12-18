@@ -59,7 +59,9 @@ int main(){
 	ustaw_semafor(g_semafor,0,1); 
 	ustaw_semafor(g_semafor,1,1); 
 	ustaw_semafor(g_semafor,3,0);
-    ustaw_semafor(g_semafor,4,1); 
+    ustaw_semafor(g_semafor,4,1);
+    ustaw_semafor(g_semafor,5,1);
+    otworz_plik_wyniki(g_semafor);
 
 	key_t klucz_magazyn = ftok(".",'M');
 	key_t klucz_tasma = ftok(".",'T');
@@ -140,7 +142,7 @@ int main(){
 			exit(0);
     	} else if (pid >0) {
 			pracownicy_pids[i] = pid;
-			printf("Zatrudniłem pracownika %d o PID = %d\n", i+1, pid);
+			logi("Zatrudniłem pracownika %d o PID = %d\n", i+1, pid);
 		} else {
 			perror("fork pracownik");
 		}
@@ -158,7 +160,8 @@ int main(){
                 	execl("./ciezarowki","ciezarowki", arg_id, arg_shm_tasma, arg_sem,arg_weight,arg_volume,arg_time,NULL);
                 	exit(0);
                 } else if (pid > 0 ){
-					printf("Stworzono ciezarowke %d, PID = %d\n", ciezarowki[i].id_ciezarowki, pid);
+                    ciezarowki_pids[i] = pid;
+					logi("Stworzono ciezarowke %d, PID = %d\n", ciezarowki[i].id_ciezarowki, pid);
 				} else {
                     perror("fork ciezarowka");
                 }
@@ -166,11 +169,11 @@ int main(){
 
 	for (int i = 0; i < 3; i++) {
                 waitpid(pracownicy_pids[i], NULL, 0);
-                printf("Pracownik %d zakonczyl swoja prace\n", i+1);
+                logi("Pracownik %d zakonczyl swoja prace\n", i+1);
         }
 
 	//tymczasowe usuwanie ciezarowek
-	printf("Rozpoczynam procedure zamykania systemu (wysylam trutki)...\n");
+	logi("Rozpoczynam procedure zamykania systemu (wysylam trutki)...\n");
 	for (int i = 0; i < liczba_ciezarowek; i++) {
         semafor_p(g_semafor, 2);
         semafor_p(g_semafor, 1);
@@ -186,12 +189,13 @@ int main(){
 
 	for (int i = 0; i < liczba_ciezarowek; i++) {
         waitpid(ciezarowki_pids[i], NULL, 0);
-        printf("Ciezarowka %d zakonczyla prace.\n", i + 1);
+        logi("Ciezarowka %d zakonczyla prace.\n", i + 1);
     }
-    cleanup();
     free(ciezarowki);
     free(ciezarowki_pids);
 
-    printf("\n\n\n Symulacja zakonczyla sie poprawnie\n");
+    logi("\n\n\n Symulacja zakonczyla sie poprawnie\n");
+    zamknij_plik_wyniki();
+    cleanup();
 return 0;
 }

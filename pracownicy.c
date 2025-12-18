@@ -9,13 +9,12 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Uzycie: %s id shmid_magazyn semafor shmid_tasma\n", argv[0]);
         return 1;
     }
-
-
 	int id_pracownik = atoi(argv[1]);
 	int shmid_magazyn = atoi(argv[2]);
 	int semafor = atoi(argv[3]);
 	int shmid_tasma = atoi(argv[4]);
-
+	
+	otworz_plik_wyniki(semafor);
 	Magazyn_wspolny *wspolny = (Magazyn_wspolny *)shmat(shmid_magazyn, NULL, 0);
 	if( wspolny == (Magazyn_wspolny *)(-1)){
                 perror("Blad dostepu do pamieci dzielonej magazynu\n");
@@ -36,13 +35,13 @@ int main(int argc, char *argv[]) {
             if(wspolny->liczba_paczek>0){
                 Paczka paczka = wspolny -> magazyn[wspolny -> liczba_paczek-1];
                 wspolny -> liczba_paczek--;
-                printf("Pracownik %d pobrał paczke %d (Waga: %.2f). Pozostalo w magazynie: %d\n",
+                logi("Pracownik %d pobrał paczke %d (Waga: %.2f). Pozostalo w magazynie: %d\n",
                 id_pracownik, paczka.id, paczka.waga, wspolny->liczba_paczek);
                 semafor_v(semafor, 0);
 				semafor_p(semafor, 2);
 				semafor_p(semafor, 1);
 				while ((tasma->aktualna_waga + paczka.waga) > tasma->max_waga) {
-                	printf("Pracownik %d: Tasma przeciazona (%.2f/%.d kg), czekam...\n",id_pracownik, tasma->aktualna_waga, tasma->max_waga);
+                	logi("Pracownik %d: Tasma przeciazona (%.2f/%.d kg), czekam...\n",id_pracownik, tasma->aktualna_waga, tasma->max_waga);
                 	semafor_v(semafor, 1);
                 	semafor_v(semafor, 2);
                 	sleep(1);
@@ -55,16 +54,16 @@ int main(int argc, char *argv[]) {
 				tasma -> aktualna_ilosc++;
 				tasma -> aktualna_waga += paczka.waga;
 
-				printf("Pracownik %d polozyl paczke %d na tasmie. (Tasma: %d szt, %.2f kg)\n",
+				logi("Pracownik %d polozyl paczke %d na tasmie. (Tasma: %d szt, %.2f kg)\n",
                 id_pracownik, paczka.id, tasma->aktualna_ilosc, tasma->aktualna_waga);
 				semafor_v(semafor, 1);
 				semafor_v(semafor, 3);
 				} else {
                 	semafor_v(semafor, 0);
             		proby_pustego_magazynu++;
-            		printf("Pracownik %d: Magazyn pusty (proba %d/%d)\n", id_pracownik, proby_pustego_magazynu, MAX_PROB);
+            		logi("Pracownik %d: Magazyn pusty (proba %d/%d)\n", id_pracownik, proby_pustego_magazynu, MAX_PROB);
             		if (proby_pustego_magazynu >= MAX_PROB) {
-                		printf("Pracownik %d: Koncze prace.\n", id_pracownik);
+                		logi("Pracownik %d: Koncze prace.\n", id_pracownik);
                 		break;
             		}
             		sleep(5);
@@ -72,5 +71,6 @@ int main(int argc, char *argv[]) {
         }
 	shmdt(wspolny);
 	shmdt(tasma);
+	zamknij_plik_wyniki();
 return 0;
 }
