@@ -54,7 +54,7 @@ void logi(const char *format, ...){ //uzywamy bibiotkei <stdarg.h> by nie musiec
     }
     
     if (g_semafor_log != -1) {
-        semafor_p(g_semafor_log, 5);
+        semafor_p(g_semafor_log, SEMAFOR_ZAPIS);
     }
     
     write(STDOUT_FILENO, bufor, total_len);
@@ -64,20 +64,9 @@ void logi(const char *format, ...){ //uzywamy bibiotkei <stdarg.h> by nie musiec
     }
     
     if (g_semafor_log != -1) {
-        semafor_v(g_semafor_log, 5);
+        semafor_v(g_semafor_log, SEMAFOR_ZAPIS);
     }
 }
-
-//SEMAFORY
-/* LISTA SEMAFOROW
-	0 - dostep do magazynu (mutex)
-	1 - dostep do tasmy (mutex)
-	2 - licznik wolnych miejsc (liczenie w dol)
-	3 - licznik paczek na tasmie (liczenie w gore)
-    4 - dostep do tasmy ciezarowek (mutex)
-    5 - mutex dla wypisywania na ekran i do pliku
-    6 - mutex ciezarowki II
-*/
 
 int utworz_nowy_semafor(void){
     key_t klucz = ftok(".",'S');
@@ -133,7 +122,7 @@ void semafor_v(int sem_id, int nr){
 //GENERATORY
 
 Paczka* generuj_paczke(int *liczba_paczek_out){
-    int liczba_paczek = 1000; //losuj(3, 100);
+    int liczba_paczek = LICZBA_PACZEK;
     double waga_paczek = 0;
     int liczba_paczek_zwyklych = 0;
 
@@ -197,12 +186,12 @@ Paczka* generuj_paczke(int *liczba_paczek_out){
 
     double objetosc_paczek = count_A * VOL_A + count_B * VOL_B + count_C * VOL_C;
     
-    printf("\n%-4s | %-12s | %-10s | %-10s | %-10s\n", 
+    logi("\n%-4s | %-12s | %-10s | %-10s | %-10s\n", 
            "ID", "TYP", "WAGA (kg)", "OBJ (m3)", "PRIORYTET");
-    printf("-----------------------------------------------------------\n");
+    logi("-----------------------------------------------------------\n");
     
     for (int i = 0; i < liczba_paczek; i++) {
-        printf("%-4d | %-12s | %-10.3f | %-10.6f | %-10s\n",
+        logi("%-4d | %-12s | %-10.3f | %-10.6f | %-10s\n",
                magazyn[i].id,
                nazwa_typu(magazyn[i].typ),
                magazyn[i].waga,
@@ -212,15 +201,15 @@ Paczka* generuj_paczke(int *liczba_paczek_out){
 
     liczba_paczek_zwyklych = liczba_paczek - przydzielone_ekspresy;
     
-    printf("\n\n-------------GENEROWANIE PACZEK-------------\n");
-    printf("Wylosowano %d paczek\n", liczba_paczek);
-    printf("Liczba paczek A: %d\n", count_A);
-    printf("Liczba paczek B: %d\n", count_B);
-    printf("Liczba paczek C: %d\n\n", count_C);
-    printf("Paczki ekspresowe: %d\n", przydzielone_ekspresy);
-    printf("Paczki zwykle: %d\n", liczba_paczek_zwyklych);
-    printf("Waga paczek: %.3f kg\n", waga_paczek);
-    printf("Objetosc paczek: %f m3\n\n", objetosc_paczek);
+    logi("\n\n-------------GENEROWANIE PACZEK-------------\n");
+    logi("Wylosowano %d paczek\n", liczba_paczek);
+    logi("Liczba paczek A: %d\n", count_A);
+    logi("Liczba paczek B: %d\n", count_B);
+    logi("Liczba paczek C: %d\n\n", count_C);
+    logi("Paczki ekspresowe: %d\n", przydzielone_ekspresy);
+    logi("Paczki zwykle: %d\n", liczba_paczek_zwyklych);
+    logi("Waga paczek: %.3f kg\n", waga_paczek);
+    logi("Objetosc paczek: %f m3\n\n", objetosc_paczek);
 
     return magazyn;
 }
@@ -230,19 +219,19 @@ void generuj_tasme(Tasma* tasma) {
     tasma->tail = 0;
     tasma->aktualna_ilosc = 0;
     tasma->aktualna_waga = 0;
-    tasma->max_pojemnosc = MAX_POJEMNOSC_FIZYCZNA_TASMY;//losuj(1, MAX_POJEMNOSC_FIZYCZNA_TASMY);
-    tasma->max_waga = losuj(30, 300);
+    tasma->max_pojemnosc = POJEMNOSC_TASMY;
+    tasma->max_waga = WAGA_TASMY;
 
-    printf("\n-------------GENEROWANIE TASMY-------------\n");
-    printf("Maksymalna liczba paczek: %d\n", tasma->max_pojemnosc);
-    printf("Maksymalny udzwig: %d kg\n\n", tasma->max_waga);
+    logi("\n-------------GENEROWANIE TASMY-------------\n");
+    logi("Maksymalna liczba paczek: %d\n", tasma->max_pojemnosc);
+    logi("Maksymalny udzwig: %d kg\n\n", tasma->max_waga);
 }
 
 Ciezarowka* generuj_ciezarowke(int *liczba_ciezarowek_out) {
-    int liczba_ciezarowek = 10;//losuj(1,10);
-    int waga_ciezarowki = losuj(100, 1000);
-    int pojemnosc_ciezarowki = 40;//losuj(10, 100);
-    time_t czas_ciezarowki = losuj(10, 50);
+    int liczba_ciezarowek = LICZBA_CIEZAROWEK;
+    int waga_ciezarowki = WAGA_CIEZAROWEK;
+    int pojemnosc_ciezarowki = POJEMNOSC_CIEZAROWEK;
+    time_t czas_ciezarowki = CZAS_ROZWOZU;
 
     Ciezarowka *ciezarowki = (Ciezarowka*)malloc(liczba_ciezarowek * sizeof(Ciezarowka));
     if (!ciezarowki) {
@@ -261,11 +250,11 @@ Ciezarowka* generuj_ciezarowke(int *liczba_ciezarowek_out) {
         ciezarowki[i].czas_rozwozu = czas_ciezarowki;
     }
 
-    printf("\n-------------GENEROWANIE CIEZAROWEK-------------\n");
-    printf("Liczba ciezarowek: %d\n", liczba_ciezarowek);
-    printf("Ladownosc: %d kg\n", waga_ciezarowki);
-    printf("Pojemnosc: %d m^3\n", pojemnosc_ciezarowki);
-    printf("Czas rozwozu: %ld s\n\n", czas_ciezarowki);
+    logi("\n-------------GENEROWANIE CIEZAROWEK-------------\n");
+    logi("Liczba ciezarowek: %d\n", liczba_ciezarowek);
+    logi("Ladownosc: %d kg\n", waga_ciezarowki);
+    logi("Pojemnosc: %d m^3\n", pojemnosc_ciezarowki);
+    logi("Czas rozwozu: %ld s\n\n", czas_ciezarowki);
 
     return ciezarowki;
 }

@@ -29,17 +29,17 @@ int main(int argc, char *argv[]) {
     }
 
     while (!zakonczenie) {
-        semafor_p(semafor, 4);
+        semafor_p(semafor, SEMAFOR_CIEZAROWKI);
         
         logi("Ciezarowka %d zajela stanowisko zaladunku.\n", id_ciezarowki);
 
         while (1) {
-            semafor_p(semafor, 3);
-            semafor_p(semafor, 1);
+            semafor_p(semafor, SEMAFOR_PACZKI);
+            semafor_p(semafor, SEMAFOR_TASMA);
 
             if (tasma->aktualna_ilosc == 0) {
-                semafor_v(semafor, 1);
-                semafor_v(semafor, 3);
+                semafor_v(semafor, SEMAFOR_TASMA);
+                semafor_v(semafor, SEMAFOR_PACZKI);
                 continue;
             }
             Paczka aktualna_paczka = tasma->bufor[tasma->tail];
@@ -48,8 +48,8 @@ int main(int argc, char *argv[]) {
                 tasma->tail = (tasma->tail + 1) % tasma->max_pojemnosc;
                 tasma->aktualna_ilosc--;
                 
-                semafor_v(semafor, 2);  
-                semafor_v(semafor, 1);  
+                semafor_v(semafor, SEMAFOR_WOLNE_MIEJSCA);  
+                semafor_v(semafor, SEMAFOR_TASMA);  
                 
                 logi("Ciezarowka %d: Otrzymano sygnal zakonczenia.\n", id_ciezarowki);
                 zakonczenie = 1;
@@ -69,17 +69,17 @@ int main(int argc, char *argv[]) {
                 logi("Ciezarowka %d zaladowala paczke ID %d (Waga: %.2f). Stan ladunku: %.2f/%d kg\n",
                      id_ciezarowki, aktualna_paczka.id, aktualna_paczka.waga, waga, dopuszczalna_waga);
 
-                semafor_v(semafor, 2);  
-                semafor_v(semafor, 1); 
+                semafor_v(semafor, SEMAFOR_WOLNE_MIEJSCA);  
+                semafor_v(semafor, SEMAFOR_TASMA); 
                 
             } else {
-                semafor_v(semafor, 3);
-                semafor_v(semafor, 1);
+                semafor_v(semafor, SEMAFOR_PACZKI);
+                semafor_v(semafor, SEMAFOR_TASMA);
                 break;  
             }
         }
 
-        semafor_v(semafor, 4);
+        semafor_v(semafor, SEMAFOR_CIEZAROWKI);
 
         if (!zakonczenie && liczba_paczek_c > 0) {
             logi("Ciezarowka %d PELNA (%.2f/%d kg, %d paczek). Odjezdza na %ld s.\n",

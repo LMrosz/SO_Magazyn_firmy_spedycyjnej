@@ -31,22 +31,22 @@ int main(int argc, char *argv[]) {
     const int MAX_PROB = 3;
 
 	while(1){
-            semafor_p(semafor, 0);
+            semafor_p(semafor, SEMAFOR_MAGAZYN);
             if(wspolny->liczba_paczek>0){
                 Paczka paczka = wspolny -> magazyn[wspolny -> liczba_paczek-1];
                 wspolny -> liczba_paczek--;
                 logi("Pracownik %d pobrał paczke %d (Waga: %.2f). Pozostalo w magazynie: %d\n",
                 id_pracownik, paczka.id, paczka.waga, wspolny->liczba_paczek);
-                semafor_v(semafor, 0);
-				semafor_p(semafor, 2);
-				semafor_p(semafor, 1);
+                semafor_v(semafor, SEMAFOR_MAGAZYN);
+				semafor_p(semafor, SEMAFOR_WOLNE_MIEJSCA);
+				semafor_p(semafor, SEMAFOR_TASMA);
 				while ((tasma->aktualna_waga + paczka.waga) > tasma->max_waga) {
                 	logi("Pracownik %d: Tasma przeciazona (%.2f/%.d kg), czekam...\n",id_pracownik, tasma->aktualna_waga, tasma->max_waga);
-                	semafor_v(semafor, 1);
-                	semafor_v(semafor, 2);
+                	semafor_v(semafor, SEMAFOR_TASMA);
+                	semafor_v(semafor, SEMAFOR_WOLNE_MIEJSCA);
                 	sleep(1);
-                	semafor_p(semafor, 2);
-                	semafor_p(semafor, 1);
+                	semafor_p(semafor, SEMAFOR_WOLNE_MIEJSCA);
+                	semafor_p(semafor, SEMAFOR_TASMA);
             	}
 
 				tasma -> bufor[tasma -> head] = paczka;
@@ -56,10 +56,10 @@ int main(int argc, char *argv[]) {
 
 				logi("Pracownik %d polozyl paczke %d na tasmie. (Tasma: %d szt, %.2f kg)\n",
                 id_pracownik, paczka.id, tasma->aktualna_ilosc, tasma->aktualna_waga);
-				semafor_v(semafor, 1);
-				semafor_v(semafor, 3);
+				semafor_v(semafor, SEMAFOR_TASMA);
+				semafor_v(semafor, SEMAFOR_PACZKI);
 				} else {
-                	semafor_v(semafor, 0);
+                	semafor_v(semafor, SEMAFOR_MAGAZYN);
             		proby_pustego_magazynu++;
             		logi("Pracownik %d: Magazyn pusty (proba %d/%d)\n", id_pracownik, proby_pustego_magazynu, MAX_PROB);
             		if (proby_pustego_magazynu >= MAX_PROB) {

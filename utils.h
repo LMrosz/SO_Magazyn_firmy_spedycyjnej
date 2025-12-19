@@ -22,11 +22,25 @@
 #define VOL_B 0.046208
 #define VOL_C 0.099712
 
-#define MAX_PACZEK 18000
-#define MAX_POJEMNOSC_FIZYCZNA_TASMY 50
+#define MAX_PACZEK 10000
 #define LICZBA_PRACOWNIKOW 3
 #define MAX_NAZWA_PLIKU 64
 #define MAX_LOG_BUFOR 1024
+
+#define LICZBA_PACZEK 10000      // liczba paczek
+#define LICZBA_CIEZAROWEK 50      // liczba ciezarowek
+#define POJEMNOSC_CIEZAROWEK 100  // pojemnosc ciezarowek w m^3
+#define WAGA_CIEZAROWEK 1000      // dopuszczalna waga ciezarowki
+#define CZAS_ROZWOZU 60           // czas rozwozu ciezarowki
+#define POJEMNOSC_TASMY 25        // maksymalna ilosc paczek na tasmie
+#define WAGA_TASMY 100            // maksymalna waga paczek na tasmie
+
+#define SEMAFOR_MAGAZYN 0        // dostep do magazynu (mutex)
+#define SEMAFOR_TASMA 1          // dostep do tasmy (mutex)
+#define SEMAFOR_WOLNE_MIEJSCA 2  // licznik wolnych miejsc (liczenie w dol)
+#define SEMAFOR_PACZKI 3         // licznik paczek na tasmie (liczenie w gore)
+#define SEMAFOR_CIEZAROWKI 4     // dostep do tasmy ciezarowek (mutex)
+#define SEMAFOR_ZAPIS 5          // wypisywanie na ekran i do pliku (mutex)
 
 //ZMIENNE GLOBALNE
 extern int g_fd_wyniki;
@@ -59,7 +73,7 @@ typedef struct {
 } Magazyn_wspolny;
 
 typedef struct {
-    Paczka bufor[MAX_POJEMNOSC_FIZYCZNA_TASMY];
+    Paczka bufor[POJEMNOSC_TASMY];
     int head;
     int tail;
     int aktualna_ilosc;

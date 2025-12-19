@@ -56,11 +56,11 @@ int main(){
     }
 
 	g_semafor = utworz_nowy_semafor();
-	ustaw_semafor(g_semafor,0,1); 
-	ustaw_semafor(g_semafor,1,1); 
-	ustaw_semafor(g_semafor,3,0);
-    ustaw_semafor(g_semafor,4,1);
-    ustaw_semafor(g_semafor,5,1);
+	ustaw_semafor(g_semafor,SEMAFOR_MAGAZYN,1); 
+	ustaw_semafor(g_semafor,SEMAFOR_TASMA,1); 
+	ustaw_semafor(g_semafor,SEMAFOR_PACZKI,0);
+    ustaw_semafor(g_semafor,SEMAFOR_CIEZAROWKI,1);
+    ustaw_semafor(g_semafor,SEMAFOR_ZAPIS,1);
     otworz_plik_wyniki(g_semafor);
 
 	key_t klucz_magazyn = ftok(".",'M');
@@ -115,7 +115,7 @@ int main(){
     }
 
 	generuj_tasme(g_tasma);
-	ustaw_semafor(g_semafor,2,g_tasma -> max_pojemnosc);
+	ustaw_semafor(g_semafor, SEMAFOR_WOLNE_MIEJSCA,g_tasma -> max_pojemnosc);
 	g_wspolny -> liczba_paczek = liczba_paczek;
 	for(int i = 0; i<liczba_paczek;i++){
 		g_wspolny -> magazyn[i] = magazyn[i];
@@ -175,16 +175,16 @@ int main(){
 	//tymczasowe usuwanie ciezarowek
 	logi("Rozpoczynam procedure zamykania systemu (wysylam trutki)...\n");
 	for (int i = 0; i < liczba_ciezarowek; i++) {
-        semafor_p(g_semafor, 2);
-        semafor_p(g_semafor, 1);
+        semafor_p(g_semafor, SEMAFOR_WOLNE_MIEJSCA);
+        semafor_p(g_semafor, SEMAFOR_TASMA);
         
         g_tasma->bufor[g_tasma->head].id = -1;
         g_tasma->bufor[g_tasma->head].waga = -1;
         g_tasma->head = (g_tasma->head + 1) % g_tasma->max_pojemnosc;
         g_tasma->aktualna_ilosc++;
 
-        semafor_v(g_semafor, 1);
-        semafor_v(g_semafor, 3);
+        semafor_v(g_semafor, SEMAFOR_TASMA);
+        semafor_v(g_semafor, SEMAFOR_PACZKI);
     }
 
 	for (int i = 0; i < liczba_ciezarowek; i++) {

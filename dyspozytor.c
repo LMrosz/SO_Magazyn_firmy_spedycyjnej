@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "utils.h"
 
 int main(){
     otworz_plik_wyniki(semafor);
