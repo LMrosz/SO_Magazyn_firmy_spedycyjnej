@@ -17,35 +17,46 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <sys/select.h>
+#include <termios.h>
+#include <dirent.h>
 
 #define VOL_A 0.019456
 #define VOL_B 0.046208
 #define VOL_C 0.099712
 
+//STAŁE?
 #define MAX_PACZEK 10000
-#define LICZBA_PRACOWNIKOW 3
+#define LICZBA_PRACOWNIKOW 4
 #define MAX_NAZWA_PLIKU 64
 #define MAX_LOG_BUFOR 1024
+#define MAX_EKSPRES MAX_PACZEK   
 
-#define LICZBA_PACZEK 10000      // liczba paczek
-#define LICZBA_CIEZAROWEK 50      // liczba ciezarowek
-#define POJEMNOSC_CIEZAROWEK 100  // pojemnosc ciezarowek w m^3
-#define WAGA_CIEZAROWEK 1000      // dopuszczalna waga ciezarowki
-#define CZAS_ROZWOZU 60           // czas rozwozu ciezarowki
+//DANE DO SYMULACJI
+#define LICZBA_PACZEK_START 50   // początkowa liczba paczek
+#define PACZEK_NA_TURE 10          // ile paczek generować na turę
+#define INTERWAL_GENEROWANIA 1    // czas generowania nowej tury paczek
+#define LICZBA_CIEZAROWEK 10      // liczba ciezarowek
+#define POJEMNOSC_CIEZAROWEK 1  // pojemnosc ciezarowek w m^3
+#define WAGA_CIEZAROWEK 30      // dopuszczalna waga ciezarowki
+#define CZAS_ROZWOZU 20           // czas rozwozu ciezarowki
 #define POJEMNOSC_TASMY 25        // maksymalna ilosc paczek na tasmie
-#define WAGA_TASMY 100            // maksymalna waga paczek na tasmie
+#define WAGA_TASMY 30            // maksymalna waga paczek na tasmie
 
+//SEMAFORY
 #define SEMAFOR_MAGAZYN 0        // dostep do magazynu (mutex)
 #define SEMAFOR_TASMA 1          // dostep do tasmy (mutex)
 #define SEMAFOR_WOLNE_MIEJSCA 2  // licznik wolnych miejsc (liczenie w dol)
 #define SEMAFOR_PACZKI 3         // licznik paczek na tasmie (liczenie w gore)
 #define SEMAFOR_CIEZAROWKI 4     // dostep do tasmy ciezarowek (mutex)
 #define SEMAFOR_ZAPIS 5          // wypisywanie na ekran i do pliku (mutex)
+#define SEMAFOR_EXPRESS 6        // obsluga paczek ekspresowych
+#define SEMAFOR_GENERATOR 7      // mutex dla generowania nowych paczek
 
-//ZMIENNE GLOBALNE
-extern int g_fd_wyniki;
-extern int g_semafor_log;
-extern char g_nazwa_pliku[MAX_NAZWA_PLIKU];
+//SYGNAŁY DYSPOZYTORRA
+#define SYGNAL_ODJEDZ_NIEPELNA SIGUSR1  // ciezarowka odjezdza z niepełnym ładunkiem
+#define SYGNAL_DOSTARCZ_EKSPRES SIGUSR2 // pracownik 4 dostarcza ładunki express do ciezarowki przy tasmie
+#define SYGNAL_ZAKONCZ_PRZYJMOWANIE SIGTERM          // zakonczenie pracy
 
 //TYPY I STRUKTURY
 typedef enum { A, B, C } TypPaczki;
@@ -69,6 +80,8 @@ typedef struct {
 typedef struct {
     int liczba_paczek;
     int aktywny;
+    int nastepne_id;                
+    int generowanie_aktywne;          
     Paczka magazyn[MAX_PACZEK];
 } Magazyn_wspolny;
 
@@ -80,7 +93,35 @@ typedef struct {
     double aktualna_waga;
     int max_pojemnosc;
     int max_waga;
+    pid_t ciezarowka; //pid ciezarowki przy tasmie
 } Tasma;
+
+typedef struct {
+    Paczka *paczki;                   
+    int ilosc;
+    int max_ilosc;                    
+    pid_t ciezarowka_pid;
+    int gotowe;
+} OkienkoEkspres;
+
+typedef struct {
+    Paczka paczki[MAX_PACZEK];
+    int ilosc;
+    pid_t ciezarowka_pid;
+    int gotowe;
+} OkienkoEkspresShm;
+
+//ZMIENNE GLOBALNE
+extern int g_fd_wyniki;
+extern int g_semafor_log;
+extern char g_nazwa_pliku[MAX_NAZWA_PLIKU];
+
+//ZMIENNE GLOBALNE DO OBSŁUGI SYGNAŁÓW - FLAGI
+//zmienna globalna ktora nie jest przechowywana w pamieci "volatile" moze byc zmieniona w dowolnym momecie
+extern volatile sig_atomic_t g_odjedz_niepelna;  // odjedź z niepełnym ładunkiem
+extern volatile sig_atomic_t g_dostarcz_ekspres; // P4 ma dostarczyć ekspres
+extern volatile sig_atomic_t g_zakoncz_prace;    // zakończ pracę
+extern volatile sig_atomic_t g_zakoncz_przyjmowanie; // konczy przyjmowanie / generowanie nowych paczek
 
 //FUNKCJE INLINE
 static inline int losuj(int min, int max) {
@@ -127,7 +168,8 @@ void semafor_p(int sem_id, int nr);
 void semafor_v(int sem_id, int nr);
 
 // Generatory
-Paczka* generuj_paczke(int *liczba_paczek_out);
+Paczka* generuj_paczke_poczatkowe(int *liczba_paczek_out, int *nastepne_id);
+Paczka generuj_pojedyncza_paczke(int id);
 Ciezarowka* generuj_ciezarowke(int *liczba_ciezarowek_out);
 void generuj_tasme(Tasma* tasma);
 
@@ -135,4 +177,10 @@ void generuj_tasme(Tasma* tasma);
 int otworz_plik_wyniki(int semafor);
 void zamknij_plik_wyniki(void);
 void logi(const char *format, ...); 
+
+//Obsługa sygnałów i sprzatanie
+void ustaw_handlery_ciezarowka(void);
+void ustaw_handlery_pracownik(int id_pracownika);
+void ustaw_handlery_generator(void);
+
 #endif
