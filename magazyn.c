@@ -46,7 +46,7 @@ void cleanup(void) {
         g_id_okienko = -1;
     }
     
-    zamknij_plik_wyniki();
+    log_close();
 }
 
 void handle_sigint(int sig) {
@@ -57,7 +57,7 @@ void handle_sigint(int sig) {
 
 pid_t uruchom_dyspozytora(int shmid_tasma, int semafor_id) {
     char dyspozytor_cmd[256];
-    sprintf(dyspozytor_cmd, "./dyspozytor %d %d", shmid_tasma, semafor_id);
+    sprintf(dyspozytor_cmd, "./dyspozytor %d %d %s", shmid_tasma, semafor_id,g_log_dir);
     
     char *tmux_env = getenv("TMUX");
     if (tmux_env != NULL) {
@@ -65,7 +65,7 @@ pid_t uruchom_dyspozytora(int shmid_tasma, int semafor_id) {
         sprintf(tmux_cmd, "tmux split-window -h -p 40 '%s; read -p \"Nacisnij Enter...\"'", dyspozytor_cmd);
         int ret = system(tmux_cmd);
         if (ret == 0) {
-            logi("Dyspozytor uruchomiony w nowym panelu tmux\n");
+            log_write("Dyspozytor uruchomiony w nowym panelu tmux\n");
             usleep(500000);
             
             FILE *fp = popen("pgrep -n -f 'dyspozytor'", "r");
@@ -74,14 +74,16 @@ pid_t uruchom_dyspozytora(int shmid_tasma, int semafor_id) {
                 if (fgets(pid_str, sizeof(pid_str), fp)) {
                     pid_t pid = atoi(pid_str);
                     pclose(fp);
-                    logi("Dyspozytor PID = %d\n", pid);
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "Dyspozytor PID = %d\n", pid);
+                    log_write(buf);
                     return pid;
                 }
                 pclose(fp);
             }
             return -1;
         }
-        logi("Blad tmux, uruchamiam normalnie...\n");
+        log_write("Blad tmux, uruchamiam normalnie...\n");
     }
     
     pid_t pid = fork();
@@ -89,11 +91,13 @@ pid_t uruchom_dyspozytora(int shmid_tasma, int semafor_id) {
         char arg1[32], arg2[32];
         sprintf(arg1, "%d", shmid_tasma);
         sprintf(arg2, "%d", semafor_id);
-        execl("./dyspozytor", "dyspozytor", arg1, arg2, NULL);
+        execl("./dyspozytor", "dyspozytor", arg1, arg2, g_log_dir, NULL);
         perror("execl dyspozytor");
         exit(1);
     } else if (pid > 0) {
-        logi("Uruchomiono dyspozytora PID = %d (w tym samym terminalu)\n", pid);
+        char buf[128];
+        snprintf(buf, sizeof(buf), "Uruchomiono dyspozytora PID = %d (w tym samym terminalu)\n", pid);
+        log_write(buf);
     } else {
         perror("fork dyspozytor");
     }
@@ -111,6 +115,25 @@ int main() {
     sa.sa_flags = 0;
     sigaction(SIGINT, &sa, NULL);
     
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+    snprintf(g_log_dir, sizeof(g_log_dir), "logi_%02d-%02d-%02d",
+             tm->tm_hour, tm->tm_min, tm->tm_sec);
+    mkdir(g_log_dir, 0755);
+
+    g_semafor = utworz_nowy_semafor();
+    ustaw_semafor(g_semafor, SEMAFOR_MAGAZYN, 1);
+    ustaw_semafor(g_semafor, SEMAFOR_TASMA, 1);
+    ustaw_semafor(g_semafor, SEMAFOR_PACZKI, 0);
+    ustaw_semafor(g_semafor, SEMAFOR_CIEZAROWKI, 1);
+    ustaw_semafor(g_semafor, SEMAFOR_ZAPIS, 1);
+    ustaw_semafor(g_semafor, SEMAFOR_EXPRESS, 1);
+    ustaw_semafor(g_semafor, SEMAFOR_GENERATOR, 1);
+
+    log_init(g_semafor, "magazyn.log", COL_GREEN);
+    sem_log_init();
+    char buf[256];
+
     int liczba_paczek = 0;
     int liczba_ciezarowek = 0;
     int nastepne_id = 0;
@@ -119,7 +142,7 @@ int main() {
     Ciezarowka* ciezarowki = generuj_ciezarowke(&liczba_ciezarowek);
     
     if (!magazyn || !ciezarowki) {
-        fprintf(stderr, "Blad generowania danych\n");
+        log_write("BLAD: Nie udalo sie wygenerowac danych\n");
         free(magazyn);
         free(ciezarowki);
         return 1;
@@ -135,17 +158,7 @@ int main() {
         free(ciezarowki);
         return 1;
     }
-    
-    g_semafor = utworz_nowy_semafor();
-    ustaw_semafor(g_semafor, SEMAFOR_MAGAZYN, 1);
-    ustaw_semafor(g_semafor, SEMAFOR_TASMA, 1);
-    ustaw_semafor(g_semafor, SEMAFOR_PACZKI, 0);
-    ustaw_semafor(g_semafor, SEMAFOR_CIEZAROWKI, 1);
-    ustaw_semafor(g_semafor, SEMAFOR_ZAPIS, 1);
-    ustaw_semafor(g_semafor, SEMAFOR_EXPRESS, 1);
-    ustaw_semafor(g_semafor, SEMAFOR_GENERATOR, 1);
-    otworz_plik_wyniki(g_semafor);
-    
+
     key_t klucz_magazyn = ftok(".", 'M');
     key_t klucz_tasma = ftok(".", 'T');
     key_t klucz_okienko = ftok(".", 'E');
@@ -223,6 +236,10 @@ int main() {
     g_okienko->ciezarowka_pid = 0;
     g_okienko->gotowe = 0;
     
+    snprintf(buf, sizeof(buf), "Pamiec dzielona: magazyn=%d, tasma=%d, ekspresy=%d\n",
+             g_id_magazyn, g_id_tasma, g_id_okienko);
+    log_write(buf);
+
     generuj_tasme(g_tasma);
     ustaw_semafor(g_semafor, SEMAFOR_WOLNE_MIEJSCA, g_tasma->max_pojemnosc);
     
@@ -243,11 +260,12 @@ int main() {
     if (generator_pid == 0) {
         sprintf(arg_shm, "%d", g_id_magazyn);
         sprintf(arg_sem, "%d", g_semafor);
-        execl("./generator", "generator", arg_shm, arg_sem, NULL);
+        execl("./generator", "generator", arg_shm, arg_sem, g_log_dir, NULL);
         perror("execl generator");
         exit(1);
     } else if (generator_pid > 0) {
-        logi("Uruchomiono generator paczek PID = %d\n", generator_pid);
+        snprintf(buf, sizeof(buf),"Uruchomiono generator paczek PID = %d\n", generator_pid);
+        log_write(buf);
     } else {
         perror("fork generator");
     }
@@ -260,11 +278,12 @@ int main() {
             sprintf(arg_sem, "%d", g_semafor);
             sprintf(arg_shm_tasma, "%d", g_id_tasma);
             sprintf(arg_shm_okienko, "%d", g_id_okienko);
-            execl("./pracownicy", "pracownicy", arg_id, arg_shm, arg_sem, arg_shm_tasma, arg_shm_okienko, NULL);
+            execl("./pracownicy", "pracownicy", arg_id, arg_shm, arg_sem, arg_shm_tasma, arg_shm_okienko, g_log_dir, NULL);
             exit(0);
         } else if (pid > 0) {
             pracownicy_pids[i] = pid;
-            logi("Zatrudnilem pracownika %d o PID = %d\n", i + 1, pid);
+            snprintf(buf, sizeof(buf),"Zatrudnilem pracownika %d o PID = %d\n", i + 1, pid);
+            log_write(buf);
         } else {
             perror("fork pracownik");
         }
@@ -281,11 +300,12 @@ int main() {
             sprintf(arg_time, "%ld", ciezarowki[i].czas_rozwozu);
             sprintf(arg_shm_okienko, "%d", g_id_okienko);
             execl("./ciezarowki", "ciezarowki", arg_id, arg_shm_tasma, arg_sem, 
-                  arg_weight, arg_volume, arg_time, arg_shm_okienko, NULL);
+                  arg_weight, arg_volume, arg_time, arg_shm_okienko, g_log_dir, NULL);
             exit(0);
         } else if (pid > 0) {
             ciezarowki_pids[i] = pid;
-            logi("Stworzono ciezarowke %d, PID = %d\n", ciezarowki[i].id_ciezarowki, pid);
+            snprintf(buf, sizeof(buf),"Uruchomiono ciezarowke %d, PID = %d\n", ciezarowki[i].id_ciezarowki, pid);
+            log_write(buf);
         } else {
             perror("fork ciezarowka");
         }
@@ -295,18 +315,19 @@ int main() {
     
     for (int i = 0; i < LICZBA_PRACOWNIKOW; i++) {
         waitpid(pracownicy_pids[i], NULL, 0);
-        logi("Pracownik %d zakonczyl swoja prace\n", i + 1);
+        snprintf(buf, sizeof(buf),"Pracownik %d zakonczyl swoja prace\n", i + 1);
+        log_write(buf);
     }
     
-    logi("Wszyscy pracownicy zakończyli.\n");
+    log_write("Wszyscy pracownicy zakończyli.\n");
     
     if (generator_pid > 0) {
         kill(generator_pid, SIGTERM);
         waitpid(generator_pid, NULL, 0);
-        logi("Generator paczek zakonczyl prace\n");
+        log_write("Generator paczek zakonczyl prace\n");
     }
     
-    logi("Wysylam SIGTERM do ciezarowek - dokoncza rozwoz...\n");
+    log_write("Wysylam SIGTERM do ciezarowek - dokoncza rozwoz...\n");
     for (int i = 0; i < liczba_ciezarowek; i++) {
         kill(ciezarowki_pids[i], SIGTERM);
     }
@@ -317,7 +338,8 @@ int main() {
     
     for (int i = 0; i < liczba_ciezarowek; i++) {
         waitpid(ciezarowki_pids[i], NULL, 0);
-        logi("Ciezarowka %d zakonczyla prace\n", i + 1);
+        snprintf(buf, sizeof(buf),"Ciezarowka %d zakonczyla prace\n", i + 1);
+        log_write(buf);
     }
     
     free(ciezarowki);
@@ -326,15 +348,14 @@ int main() {
     if (dyspozytor_pid > 0) {
         kill(dyspozytor_pid, SIGTERM);
         waitpid(dyspozytor_pid, NULL, 0);
-        logi("Dyspozytor zakonczyl prace\n");
+        log_write("Dyspozytor zakonczyl prace\n");
     } else if (dyspozytor_pid == -1) {
         system("pkill -f './dyspozytor'");
         sleep(1);
-        logi("Dyspozytor (tmux) zakonczyl prace\n");
+        log_write("Dyspozytor (tmux) zakonczyl prace\n");
     }
     
-    logi("\n\n\n Symulacja zakonczyla sie poprawnie\n");
-    zamknij_plik_wyniki();
+    log_write("\n\n\n Symulacja zakonczyla sie poprawnie\n");
     cleanup();
     return 0;
 }

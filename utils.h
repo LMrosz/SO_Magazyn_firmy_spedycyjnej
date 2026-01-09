@@ -20,6 +20,8 @@
 #include <sys/select.h>
 #include <termios.h>
 #include <dirent.h>
+#include <sys/time.h>
+#include <sys/stat.h>
 
 #define VOL_A 0.019456
 #define VOL_B 0.046208
@@ -33,15 +35,15 @@
 #define MAX_EKSPRES MAX_PACZEK   
 
 //DANE DO SYMULACJI
-#define LICZBA_PACZEK_START 50   // początkowa liczba paczek
+#define LICZBA_PACZEK_START 100   // początkowa liczba paczek
 #define PACZEK_NA_TURE 10          // ile paczek generować na turę
-#define INTERWAL_GENEROWANIA 1    // czas generowania nowej tury paczek
-#define LICZBA_CIEZAROWEK 10      // liczba ciezarowek
-#define POJEMNOSC_CIEZAROWEK 1  // pojemnosc ciezarowek w m^3
-#define WAGA_CIEZAROWEK 30      // dopuszczalna waga ciezarowki
-#define CZAS_ROZWOZU 20           // czas rozwozu ciezarowki
+#define INTERWAL_GENEROWANIA 5    // czas generowania nowej tury paczek
+#define LICZBA_CIEZAROWEK 50      // liczba ciezarowek
+#define POJEMNOSC_CIEZAROWEK 100  // pojemnosc ciezarowek w m^3
+#define WAGA_CIEZAROWEK 1000     // dopuszczalna waga ciezarowki
+#define CZAS_ROZWOZU 60           // czas rozwozu ciezarowki
 #define POJEMNOSC_TASMY 25        // maksymalna ilosc paczek na tasmie
-#define WAGA_TASMY 30            // maksymalna waga paczek na tasmie
+#define WAGA_TASMY 250            // maksymalna waga paczek na tasmie
 
 //SEMAFORY
 #define SEMAFOR_MAGAZYN 0        // dostep do magazynu (mutex)
@@ -57,6 +59,14 @@
 #define SYGNAL_ODJEDZ_NIEPELNA SIGUSR1  // ciezarowka odjezdza z niepełnym ładunkiem
 #define SYGNAL_DOSTARCZ_EKSPRES SIGUSR2 // pracownik 4 dostarcza ładunki express do ciezarowki przy tasmie
 #define SYGNAL_ZAKONCZ_PRZYJMOWANIE SIGTERM          // zakonczenie pracy
+
+//KOLORY ANSI
+#define COL_RESET   "\033[0m"
+#define COL_RED     "\033[31m"
+#define COL_GREEN   "\033[32m"
+#define COL_YELLOW  "\033[33m"
+#define COL_MAGENTA "\033[35m"
+#define COL_CYAN    "\033[36m"
 
 //TYPY I STRUKTURY
 typedef enum { A, B, C } TypPaczki;
@@ -86,6 +96,16 @@ typedef struct {
 } Magazyn_wspolny;
 
 typedef struct {
+    pid_t pid;
+    int id;
+    double aktualna_waga;
+    double aktualna_pojemnosc;
+    int max_waga;
+    int max_pojemnosc;
+    int liczba_paczek;
+} CiezarowkaInfo;
+
+typedef struct {
     Paczka bufor[POJEMNOSC_TASMY];
     int head;
     int tail;
@@ -94,6 +114,7 @@ typedef struct {
     int max_pojemnosc;
     int max_waga;
     pid_t ciezarowka; //pid ciezarowki przy tasmie
+    CiezarowkaInfo ciezarowka_info;
 } Tasma;
 
 typedef struct {
@@ -112,9 +133,10 @@ typedef struct {
 } OkienkoEkspresShm;
 
 //ZMIENNE GLOBALNE
-extern int g_fd_wyniki;
+extern int g_fd_log;
 extern int g_semafor_log;
-extern char g_nazwa_pliku[MAX_NAZWA_PLIKU];
+extern char g_log_dir[MAX_NAZWA_PLIKU];
+extern const char *g_log_kolor;
 
 //ZMIENNE GLOBALNE DO OBSŁUGI SYGNAŁÓW - FLAGI
 //zmienna globalna ktora nie jest przechowywana w pamieci "volatile" moze byc zmieniona w dowolnym momecie
@@ -173,10 +195,14 @@ Paczka generuj_pojedyncza_paczke(int id);
 Ciezarowka* generuj_ciezarowke(int *liczba_ciezarowek_out);
 void generuj_tasme(Tasma* tasma);
 
-//Obsługa plikow
-int otworz_plik_wyniki(int semafor);
-void zamknij_plik_wyniki(void);
-void logi(const char *format, ...); 
+// Raporty
+void log_init(int semafor, const char *nazwa_pliku, const char *kolor);
+void log_close(void);
+void log_write(const char *msg);
+void log_timestamp(char *buf, int size);
+void sem_log_init(void);
+void sem_log_close(void);
+void sem_log_write(const char *msg);
 
 //Obsługa sygnałów i sprzatanie
 void ustaw_handlery_ciezarowka(void);

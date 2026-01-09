@@ -1,77 +1,92 @@
 #include "utils.h"
 
-int g_fd_wyniki = -1;
+int g_fd_log = -1;
 int g_semafor_log = -1;
-char g_nazwa_pliku[MAX_NAZWA_PLIKU] = "";
+char g_log_dir[MAX_NAZWA_PLIKU] = "";
+const char *g_log_kolor = COL_RESET;
+static int g_fd_sem_log = -1;
 
 volatile sig_atomic_t g_odjedz_niepelna = 0;
 volatile sig_atomic_t g_dostarcz_ekspres = 0;
 volatile sig_atomic_t g_zakoncz_prace = 0;
 volatile sig_atomic_t g_zakoncz_przyjmowanie = 0;
 
-//FUNKCJE POMOCNICZE - zapis na ekran i do pliku
+//FUNKCJE POMOCNICZE - zapis na ekran i do plikow
+void log_timestamp(char *buf, int size) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    struct tm *tm = localtime(&tv.tv_sec);
+    snprintf(buf, size, "[%02d:%02d:%02d.%03ld] ",
+             tm->tm_hour, tm->tm_min, tm->tm_sec, tv.tv_usec / 1000);
+}
 
-int otworz_plik_wyniki(int semafor) {
+void log_init(int semafor, const char *nazwa_pliku, const char *kolor) {
     g_semafor_log = semafor;
+    g_log_kolor = kolor;
     
-    time_t teraz = time(NULL);
-    struct tm *tm_info = localtime(&teraz);
-    snprintf(g_nazwa_pliku, sizeof(g_nazwa_pliku),
-             "wynik_%02d-%02d-%02d.txt",
-             tm_info->tm_hour,
-             tm_info->tm_min,
-             tm_info->tm_sec);
-    
-    g_fd_wyniki = open(g_nazwa_pliku, O_WRONLY | O_CREAT | O_APPEND, 0644);
-    
-    if (g_fd_wyniki == -1) {
-        perror("open plik wynikow");
-        return -1;
-    }
-    
-    return 0;
-}
+    if (g_log_dir[0] == '\0') return; 
 
-void zamknij_plik_wyniki(void) {
-    if (g_fd_wyniki != -1) {
-        close(g_fd_wyniki);
-        g_fd_wyniki = -1;
+    char sciezka[256];
+    snprintf(sciezka, sizeof(sciezka), "%s/%s", g_log_dir, nazwa_pliku);
+    g_fd_log = open(sciezka, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (g_fd_log == -1) {
+        perror("open log");
     }
 }
 
-void logi(const char *format, ...) {
-    char bufor[MAX_LOG_BUFOR];
-    int offset = 0;
-    
-    time_t teraz = time(NULL);
-    struct tm *tm_info = localtime(&teraz);
-    offset = strftime(bufor, sizeof(bufor), "[%H:%M:%S] ", tm_info);
-    
-    va_list args;
-    va_start(args, format);
-    int len = vsnprintf(bufor + offset, sizeof(bufor) - offset, format, args);
-    va_end(args);
-    
-    if (len < 0) return;
-    
-    int total_len = offset + len;
-    if (total_len >= (int)sizeof(bufor)) {
-        total_len = sizeof(bufor) - 1;
+void log_close(void) {
+    if (g_fd_log != -1) {
+        close(g_fd_log);
+        g_fd_log = -1;
     }
+}
+
+void log_write(const char *msg) {
+    char ts[32];
+    log_timestamp(ts, sizeof(ts));
     
     if (g_semafor_log != -1) {
         semafor_p(g_semafor_log, SEMAFOR_ZAPIS);
     }
     
-    write(STDOUT_FILENO, bufor, total_len);
+    write(STDOUT_FILENO, g_log_kolor, strlen(g_log_kolor));
+    write(STDOUT_FILENO, ts, strlen(ts));
+    write(STDOUT_FILENO, msg, strlen(msg));
+    write(STDOUT_FILENO, COL_RESET, strlen(COL_RESET));
     
-    if (g_fd_wyniki != -1) {
-        write(g_fd_wyniki, bufor, total_len);
+    if (g_fd_log != -1) {
+        write(g_fd_log, ts, strlen(ts));
+        write(g_fd_log, msg, strlen(msg));
     }
     
     if (g_semafor_log != -1) {
         semafor_v(g_semafor_log, SEMAFOR_ZAPIS);
     }
+}
+
+void sem_log_init(void) {
+    if (g_log_dir[0] == '\0') return;
+    
+    char sciezka[256];
+    snprintf(sciezka, sizeof(sciezka), "%s/semafor.log", g_log_dir);
+    g_fd_sem_log = open(sciezka, O_WRONLY | O_CREAT | O_APPEND, 0644);
+}
+
+void sem_log_close(void) {
+    if (g_fd_sem_log != -1) {
+        close(g_fd_sem_log);
+        g_fd_sem_log = -1;
+    }
+}
+
+void sem_log_write(const char *msg) {
+    if (g_fd_sem_log == -1) return;
+    
+    char ts[32];
+    log_timestamp(ts, sizeof(ts));
+    
+    write(g_fd_sem_log, ts, strlen(ts));
+    write(g_fd_sem_log, msg, strlen(msg));
 }
 
 //HANDLERY SYGNAŁÓW
@@ -157,6 +172,20 @@ void ustaw_handlery_generator(void) {
 }
 
 //FUNKCJE - SEMAFOR
+static const char* nazwa_semafora(int nr) {
+    switch(nr) {
+        case SEMAFOR_MAGAZYN: return "MAGAZYN";
+        case SEMAFOR_TASMA: return "TASMA";
+        case SEMAFOR_WOLNE_MIEJSCA: return "WOLNE_MIEJSCE";
+        case SEMAFOR_PACZKI: return "PACZKI_TASMA";
+        case SEMAFOR_CIEZAROWKI: return "CIEZAROWKI";
+        case SEMAFOR_ZAPIS: return "ZAPIS";
+        case SEMAFOR_EXPRESS: return "PACZKI_EXPRESS";
+        case SEMAFOR_GENERATOR: return "GENERATOR";
+        default: return "?";
+    }
+}
+
 int utworz_nowy_semafor(void) {
     key_t klucz = ftok(".", 'S');
     if (klucz == -1) {
@@ -165,21 +194,27 @@ int utworz_nowy_semafor(void) {
     }
     int sem = semget(klucz, 8, 0600 | IPC_CREAT);
     if (sem == -1) {
-        printf("Nie moglem utworzyc nowego semafora.\n");
         perror("semget");
         exit(EXIT_FAILURE);
     }
-    
-    printf("Semafor zostal utworzony : %d\n", sem);
+    char buf[128];
+    snprintf(buf, sizeof(buf),"Semafor zostal utworzony : %d\n", sem);
+    sem_log_write(buf);
     return sem;
 }
 
 void usun_semafor(int sem_id) {
+    char buf[128];
+    snprintf(buf, sizeof(buf), "USUWANIE semafora %d\n", sem_id);
+    sem_log_write(buf);
+
     if (semctl(sem_id, 0, IPC_RMID) == -1) {
         perror("semctl IPC_RMID");
     } else {
-        printf("Semafor %d zostal usuniety.\n", sem_id);
+        snprintf(buf, sizeof(buf), "Semafor %d zostal usuniety.\n", sem_id);
+        sem_log_write(buf);
     }
+    sem_log_close();
 }
 
 void ustaw_semafor(int sem_id, int nr, int val) {
@@ -187,10 +222,18 @@ void ustaw_semafor(int sem_id, int nr, int val) {
         perror("semctl SETVAL");
         exit(EXIT_FAILURE);
     }
-    printf("Semafor %d[%d] ustawiony na %d.\n", sem_id, nr, val);
+    char buf[128];
+    snprintf(buf, sizeof(buf), "USTAW [%s] = %d\n", nazwa_semafora(nr), val);
+    sem_log_write(buf);
 }
 
 void semafor_p(int sem_id, int nr) {
+    if (nr != SEMAFOR_ZAPIS) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "P [%s] (PID %d)\n", nazwa_semafora(nr), getpid());
+        sem_log_write(buf);
+    }
+
     struct sembuf op = { .sem_num = nr, .sem_op = -1, .sem_flg = SEM_UNDO };
     while (semop(sem_id, &op, 1) == -1) {
         if (errno == EINTR) continue;
@@ -204,6 +247,12 @@ void semafor_v(int sem_id, int nr) {
     if (semop(sem_id, &op, 1) == -1) {
         perror("semop V");
         exit(EXIT_FAILURE);
+    }
+
+    if (nr != SEMAFOR_ZAPIS) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "V [%s] (PID %d)\n", nazwa_semafora(nr), getpid());
+        sem_log_write(buf);
     }
 }
 
@@ -233,6 +282,10 @@ Paczka generuj_pojedyncza_paczke(int id) {
     }
     p.waga = round(p.waga * 1000) / 1000.0;
     p.priorytet = (rand() % 100 < 20) ? EXPRES : ZWYKLA; // 20% szans na ekspres
+    char buf[256];
+
+    snprintf(buf, sizeof(buf),"Paczka %d  |  Typ paczki: %s  |  Objetosc paczki: %lf  |  Waga paczki: %lf\n",p.id,p.priorytet == EXPRES ? "EKSPRES" : "zwykla",p.objetosc, p.waga);
+    log_write(buf);
     return p;
 }
 
@@ -260,13 +313,18 @@ Paczka* generuj_paczke_poczatkowe(int *liczba_paczek_out, int *nastepne_id) {
     if (nastepne_id) {
         *nastepne_id = liczba_paczek + 1;
     }
-    
-    logi("\n-------------GENEROWANIE PACZEK POCZATKOWYCH-------------\n");
-    logi("Wygenerowano %d paczek poczatkowych\n", liczba_paczek);
-    logi("W tym ekspresowych: %d\n", ekspresowe);
-    logi("Generowanie dynamiczne: AKTYWNE (co %d sekund, %d paczek)\n\n", 
+
+    char buf[256];
+    snprintf(buf, sizeof(buf),"\n-------------GENEROWANIE PACZEK-------------\n");
+    log_write(buf);
+    snprintf(buf, sizeof(buf),"Wygenerowano %d paczek poczatkowych\n", liczba_paczek);
+    log_write(buf);
+    snprintf(buf, sizeof(buf),"W tym ekspresowych: %d\n", ekspresowe);
+    log_write(buf);
+    snprintf(buf, sizeof(buf),"Generowanie dynamiczne: AKTYWNE (co %d sekund, %d paczek)\n\n", 
          INTERWAL_GENEROWANIA, PACZEK_NA_TURE);
-    
+    log_write(buf);
+
     return magazyn;
 }
 
@@ -278,10 +336,14 @@ void generuj_tasme(Tasma* tasma) {
     tasma->max_pojemnosc = POJEMNOSC_TASMY;
     tasma->max_waga = WAGA_TASMY;
     tasma->ciezarowka = 0;
-    
-    logi("\n-------------GENEROWANIE TASMY-------------\n");
-    logi("Maksymalna liczba paczek: %d\n", tasma->max_pojemnosc);
-    logi("Maksymalny udzwig: %d kg\n\n", tasma->max_waga);
+
+    char buf[256];
+    snprintf(buf, sizeof(buf),"\n-------------GENEROWANIE TASMY-------------\n");
+    log_write(buf);
+    snprintf(buf, sizeof(buf),"Maksymalna liczba paczek: %d\n", tasma->max_pojemnosc);
+    log_write(buf);
+    snprintf(buf, sizeof(buf),"Maksymalny udzwig: %d kg\n\n", tasma->max_waga);
+    log_write(buf);
 }
 
 Ciezarowka* generuj_ciezarowke(int *liczba_ciezarowek_out) {
@@ -306,12 +368,19 @@ Ciezarowka* generuj_ciezarowke(int *liczba_ciezarowek_out) {
         ciezarowki[i].pojemnosc_ciezarowki = pojemnosc_ciezarowki;
         ciezarowki[i].czas_rozwozu = czas_ciezarowki;
     }
+
+    char buf[256];
     
-    logi("\n-------------GENEROWANIE CIEZAROWEK-------------\n");
-    logi("Liczba ciezarowek: %d\n", liczba_ciezarowek);
-    logi("Ladownosc: %d kg\n", waga_ciezarowki);
-    logi("Pojemnosc: %d m^3\n", pojemnosc_ciezarowki);
-    logi("Czas rozwozu: %ld s\n\n", czas_ciezarowki);
-    
+    snprintf(buf, sizeof(buf),"\n-------------GENEROWANIE CIEZAROWEK-------------\n");
+    log_write(buf);
+    snprintf(buf, sizeof(buf),"Liczba ciezarowek: %d\n", liczba_ciezarowek);
+    log_write(buf);
+    snprintf(buf, sizeof(buf),"Ladownosc: %d kg\n", waga_ciezarowki);
+    log_write(buf);
+    snprintf(buf, sizeof(buf),"Pojemnosc: %d m^3\n", pojemnosc_ciezarowki);
+    log_write(buf);
+    snprintf(buf, sizeof(buf),"Czas rozwozu: %ld s\n\n", czas_ciezarowki);
+    log_write(buf);
+
     return ciezarowki;
 }

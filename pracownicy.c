@@ -3,8 +3,8 @@
 int main(int argc, char *argv[]) {
     srand(time(NULL) ^ getpid());
     
-    if (argc < 6) {
-        fprintf(stderr, "Uzycie: %s id shmid_magazyn semafor shmid_tasma shmid_okienko\n", argv[0]);
+    if (argc < 7) {
+        fprintf(stderr, "Uzycie: %s id shmid_magazyn semafor shmid_tasma shmid_okienko log_dir\n", argv[0]);
         return 1;
     }
     
@@ -13,9 +13,13 @@ int main(int argc, char *argv[]) {
     int semafor = atoi(argv[3]);
     int shmid_tasma = atoi(argv[4]);
     int shmid_okienko = atoi(argv[5]);
+    strncpy(g_log_dir, argv[6], sizeof(g_log_dir) - 1);
     
     ustaw_handlery_pracownik(id_pracownik);
-    otworz_plik_wyniki(semafor);
+    char nazwa[32];
+    snprintf(nazwa, sizeof(nazwa), "pracownicy.log");
+    log_init(semafor, nazwa, COL_CYAN);
+    sem_log_init();
     
     Magazyn_wspolny *wspolny = (Magazyn_wspolny *)shmat(shmid_magazyn, NULL, 0);
     if (wspolny == (Magazyn_wspolny *)(-1)) {
@@ -38,8 +42,12 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
+    char buf[256];
+
     if (id_pracownik == 4) {
-        logi("Pracownik P4 (PID %d) - dostawa paczek ekspres (BEZ LIMITU).\n", getpid());
+        snprintf(buf, sizeof(buf),"Pracownik P4 (PID %d) - dostawa paczek ekspres.\n", getpid());
+        log_write(buf);
+
         int pojemnosc_tablicy = 100;
         Paczka *paczki_ekspres = malloc(pojemnosc_tablicy * sizeof(Paczka));
         if (!paczki_ekspres) {
@@ -58,13 +66,13 @@ int main(int argc, char *argv[]) {
             }
             
             g_dostarcz_ekspres = 0;
-            logi("Pracownik P4: Otrzymano polecenie dostarczenia WSZYSTKICH paczek ekspresowych!\n");
+            log_write("Pracownik P4: Otrzymano polecenie dostarczenia paczek ekspresowych!\n");
             semafor_p(semafor, SEMAFOR_TASMA);
             pid_t ciezarowka_pid = tasma->ciezarowka;
             semafor_v(semafor, SEMAFOR_TASMA);
         
             if (ciezarowka_pid == 0) {
-                logi("Pracownik P4: Brak ciezarowki przy tasmie!\n");
+                log_write("Pracownik P4: Brak ciezarowki przy tasmie!\n");
                 continue;
             }
             
@@ -81,7 +89,7 @@ int main(int argc, char *argv[]) {
                 pojemnosc_tablicy = liczba_ekspres + 50;
                 Paczka *nowa = realloc(paczki_ekspres, pojemnosc_tablicy * sizeof(Paczka));
                 if (!nowa) {
-                    logi("Pracownik P4: Blad realokacji pamieci!\n");
+                    log_write("Pracownik P4: Blad realokacji pamieci!\n");
                     semafor_v(semafor, SEMAFOR_MAGAZYN);
                     continue;
                 }
@@ -97,11 +105,12 @@ int main(int argc, char *argv[]) {
             semafor_v(semafor, SEMAFOR_MAGAZYN);
             
             if (ile == 0) {
-                logi("Pracownik P4: Brak paczek ekspresowych w magazynie!\n");
+                log_write("Pracownik P4: Brak paczek ekspresowych w magazynie!\n");
                 continue;
             }
             
-            logi("Pracownik P4: Znalazlem %d paczek ekspresowych, dostarczam WSZYSTKIE...\n", ile);
+            snprintf(buf, sizeof(buf),"Pracownik P4: Znalazlem %d paczek ekspresowych, dostarczam...\n", ile);
+            log_write(buf);
             semafor_p(semafor, SEMAFOR_EXPRESS);
             semafor_p(semafor, SEMAFOR_TASMA);
             
@@ -116,7 +125,8 @@ int main(int argc, char *argv[]) {
                 }
                 semafor_v(semafor, SEMAFOR_MAGAZYN);
                 
-                logi("Pracownik P4: Ciezarowka odjechala, zwracam %d paczek do magazynu.\n", ile);
+                snprintf(buf, sizeof(buf),"Pracownik P4: Ciezarowka odjechala, zwracam %d paczek do magazynu.\n", ile);
+                log_write(buf);
                 continue;
             }
             semafor_v(semafor, SEMAFOR_TASMA);
@@ -126,24 +136,29 @@ int main(int argc, char *argv[]) {
             
             for (int i = 0; i < ile; i++) {
                 okienko->paczki[okienko->ilosc++] = paczki_ekspres[i];
-                logi("Pracownik P4: Wlozyl EKSPRES ID %d (%.2f kg) do okienka [%d/%d]\n",
+                snprintf(buf, sizeof(buf),"Pracownik P4: Wlozyl EKSPRES ID %d (%.2f kg) do okienka [%d/%d]\n",
                      paczki_ekspres[i].id, paczki_ekspres[i].waga, i + 1, ile);
+                log_write(buf);
             }
             
             okienko->gotowe = 1;
             
             semafor_v(semafor, SEMAFOR_EXPRESS);
             
-            logi("Pracownik P4: Dostarczono WSZYSTKIE %d paczek ekspresowych przez okienko.\n", ile);
+            snprintf(buf, sizeof(buf),"Pracownik P4: Dostarczono WSZYSTKIE %d paczek ekspresowych.\n", ile);
+            log_write(buf);
         }
         
         free(paczki_ekspres);
-        logi("Pracownik P4: Koncze prace.\n");
+        log_write("Pracownik P4: Koncze prace.\n");
         
     } else {
         int proby_pustego_magazynu = 0;
         const int MAX_PROB = 5;
-        
+
+        snprintf(buf, sizeof(buf), "Pracownik %d start (PID %d)\n", id_pracownik, getpid());
+        log_write(buf);
+
         while (!g_zakoncz_prace) {
             semafor_p(semafor, SEMAFOR_MAGAZYN);
             
@@ -161,17 +176,19 @@ int main(int argc, char *argv[]) {
                 Paczka paczka = wspolny->magazyn[znaleziono_indeks];
                 wspolny->magazyn[znaleziono_indeks] = wspolny->magazyn[--wspolny->liczba_paczek];
                 
-                logi("Pracownik %d pobral paczke %d (Waga: %.2f). Pozostalo: %d\n",
+                snprintf(buf, sizeof(buf),"Pracownik %d pobral paczke %d (Waga: %.2f). Pozostalo: %d\n",
                      id_pracownik, paczka.id, paczka.waga, wspolny->liczba_paczek);
-                
+                log_write(buf);
+
                 semafor_v(semafor, SEMAFOR_MAGAZYN);
-                
                 semafor_p(semafor, SEMAFOR_WOLNE_MIEJSCA);
                 semafor_p(semafor, SEMAFOR_TASMA);
                 
                 while ((tasma->aktualna_waga + paczka.waga) > tasma->max_waga && !g_zakoncz_prace) {
-                    logi("Pracownik %d: Tasma przeciazona (%.2f/%d kg), czekam...\n",
+                    snprintf(buf, sizeof(buf),"Pracownik %d: Tasma przeciazona (%.2f/%d kg), czekam...\n",
                          id_pracownik, tasma->aktualna_waga, tasma->max_waga);
+                    
+                    log_write(buf);
                     semafor_v(semafor, SEMAFOR_TASMA);
                     semafor_v(semafor, SEMAFOR_WOLNE_MIEJSCA);
                     sleep(1);
@@ -190,8 +207,9 @@ int main(int argc, char *argv[]) {
                 tasma->aktualna_ilosc++;
                 tasma->aktualna_waga += paczka.waga;
                 
-                logi("Pracownik %d polozyl paczke %d na tasmie. (Tasma: %d szt, %.2f kg)\n",
+                snprintf(buf, sizeof(buf),"Pracownik %d polozyl paczke %d na tasmie. (Tasma: %d szt, %.2f kg)\n",
                      id_pracownik, paczka.id, tasma->aktualna_ilosc, tasma->aktualna_waga);
+                log_write(buf);
                 
                 semafor_v(semafor, SEMAFOR_TASMA);
                 semafor_v(semafor, SEMAFOR_PACZKI);
@@ -206,29 +224,34 @@ int main(int argc, char *argv[]) {
                 semafor_v(semafor, SEMAFOR_MAGAZYN);
                 
                 if (!generator_aktywny && pozostalo == 0) {
-                    logi("Pracownik %d: Magazyn pusty i generator zatrzymany - koncze.\n", id_pracownik);
+                    snprintf(buf, sizeof(buf),"Pracownik %d: Magazyn pusty i generator zatrzymany - koncze.\n", id_pracownik);
+                    log_write(buf);
                     break;
                 }
                 
                 if (proby_pustego_magazynu >= MAX_PROB && !generator_aktywny) {
-                    logi("Pracownik %d: Koncze prace - brak paczek.\n", id_pracownik);
+                    snprintf(buf, sizeof(buf),"Pracownik %d: Koncze prace - brak paczek.\n", id_pracownik);
+                    log_write(buf);
                     break;
                 }
                 
-                logi("Pracownik %d: Brak zwyklych paczek (proba %d/%d), czekam...\n",
+                snprintf(buf, sizeof(buf),"Pracownik %d: Brak zwyklych paczek (proba %d/%d), czekam...\n",
                      id_pracownik, proby_pustego_magazynu, MAX_PROB);
+                log_write(buf);
                 sleep(2);
             }
         }
         
         if (g_zakoncz_prace) {
-            logi("Pracownik %d: Koncze prace na polecenie.\n", id_pracownik);
+            snprintf(buf, sizeof(buf),"Pracownik %d: Koncze prace na polecenie.\n", id_pracownik);
+            log_write(buf);
         }
     }
     
     shmdt(wspolny);
     shmdt(tasma);
     shmdt(okienko);
-    zamknij_plik_wyniki();
+    sem_log_close();
+    log_close();
     return 0;
 }

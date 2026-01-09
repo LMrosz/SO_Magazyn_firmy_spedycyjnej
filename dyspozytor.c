@@ -3,6 +3,12 @@
 int g_semafor = -1;
 int g_id_tasma = -1;
 Tasma *g_tasma = NULL;
+volatile sig_atomic_t g_dyspozytor_zakoncz = 0;
+
+void handler_dyspozytor_sigterm(int sig) {
+    (void)sig;
+    g_dyspozytor_zakoncz = 1;
+}
 
 void wyswietl_menu(void) {
     printf("\n\n");
@@ -21,6 +27,8 @@ void wyswietl_menu(void) {
 }
 
 void wyswietl_status(void) {
+    char buf[512];
+    
     if (g_tasma == NULL) {
         printf("Brak dostepu do tasmy!\n");
         return;
@@ -28,19 +36,33 @@ void wyswietl_status(void) {
     
     semafor_p(g_semafor, SEMAFOR_TASMA);
     
-    printf("\n=== STATUS SYSTEMU ===\n");
-    printf("Tasma: %d/%d paczek, %.2f/%d kg\n",
-           g_tasma->aktualna_ilosc, g_tasma->max_pojemnosc,
+    printf("\n╔══════════════════ STATUS ══════════════════╗\n");
+    printf("║ TASMA:                                      ║\n");
+    printf("║   Paczki: %d/%d                              \n", 
+           g_tasma->aktualna_ilosc, g_tasma->max_pojemnosc);
+    printf("║   Waga: %.2f/%d kg                           \n",
            g_tasma->aktualna_waga, g_tasma->max_waga);
+    printf("╠═════════════════════════════════════════════╣\n");
     
     if (g_tasma->ciezarowka > 0) {
-        printf("Ciezarowka przy tasmie: PID %d\n", g_tasma->ciezarowka);
+        CiezarowkaInfo *ci = &g_tasma->ciezarowka_info;
+        printf("║ CIEZAROWKA PRZY TASMIE:                     ║\n");
+        printf("║   ID: %d (PID %d)                            \n", ci->id, ci->pid);
+        printf("║   Ladunek: %.2f/%d kg                        \n", ci->aktualna_waga, ci->max_waga);
+        printf("║   Pojemnosc: %.2f/%d m3                      \n", ci->aktualna_pojemnosc, ci->max_pojemnosc);
+        printf("║   Paczek: %d                                 \n", ci->liczba_paczek);
     } else {
-        printf("Ciezarowka przy tasmie: BRAK\n");
+        printf("║ CIEZAROWKA: BRAK                            ║\n");
     }
+    printf("╚═════════════════════════════════════════════╝\n");
+    
+    snprintf(buf, sizeof(buf), "STATUS: Tasma %d/%d paczek, %.2f/%d kg, Ciezarowka: %s\n",
+             g_tasma->aktualna_ilosc, g_tasma->max_pojemnosc,
+             g_tasma->aktualna_waga, g_tasma->max_waga,
+             g_tasma->ciezarowka > 0 ? "TAK" : "BRAK");
+    log_write(buf);
     
     semafor_v(g_semafor, SEMAFOR_TASMA);
-    printf("======================\n");
 }
 
 pid_t znajdz_ciezarowke_przy_tasmie(void) {
@@ -91,36 +113,45 @@ pid_t znajdz_pracownika_p4(void) {
 }
 
 void wyslij_sigusr1_do_ciezarowki(void) {
+    char buf[128];
     pid_t pid = znajdz_ciezarowke_przy_tasmie();
     
     if (pid > 0) {
         if (kill(pid, SIGUSR1) == 0) {
             printf("✓ Wyslano SIGUSR1 do ciezarowki PID %d - odjedzie z niepelnym ladunkiem\n", pid);
-            logi("DYSPOZYTOR: Wyslano SIGUSR1 do ciezarowki PID %d\n", pid);
+            snprintf(buf, sizeof(buf), "DYSPOZYTOR: Wyslano SIGUSR1 do ciezarowki PID %d\n", pid);
+            log_write(buf);
         } else {
             perror("Blad wysylania SIGUSR1");
+            log_write("BLAD: nie udalo sie wyslac SIGUSR1\n");
         }
     } else {
         printf("✗ Brak ciezarowki przy tasmie!\n");
+        log_write("SIGUSR1: brak ciezarowki przy tasmie\n");
     }
 }
 
 void wyslij_sigusr2_do_p4(void) {
+    char buf[128];
     pid_t pid = znajdz_pracownika_p4();
     
     if (pid > 0) {
         if (kill(pid, SIGUSR2) == 0) {
             printf("✓ Wyslano SIGUSR2 do P4 (PID %d) - dostarczy WSZYSTKIE paczki ekspresowe\n", pid);
-            logi("DYSPOZYTOR: Wyslano SIGUSR2 do P4 PID %d\n", pid);
+            snprintf(buf, sizeof(buf), "DYSPOZYTOR: Wyslano SIGUSR2 do P4 PID %d\n", pid);
+            log_write(buf);
         } else {
             perror("Blad wysylania SIGUSR2");
+            log_write("BLAD: nie udalo sie wyslac SIGUSR2\n");
         }
     } else {
         printf("✗ Nie znaleziono pracownika P4!\n");
+        log_write("SIGUSR2: nie znaleziono pracownika P4\n");
     }
 }
 
 void wyslij_sigterm_do_wszystkich(void) {
+    char buf[256];
     int wyslane = 0;
     DIR *dir = opendir("/proc");
     if (!dir) {
@@ -132,9 +163,13 @@ void wyslij_sigterm_do_wszystkich(void) {
     
     printf("Wysylam SIGTERM:\n");
     printf("  - Pracownicy: zakoncza prace\n");
-    printf("  - Generator: zatrzyma generowanie\n");
+    printf("  - Generator: zatrzyma generowanie paczek\n");
     printf("  - Ciezarowki: dokoncza rozwoz i zakoncza\n\n");
-    
+    log_write("--- WYSYLANIE SIGTERM DO WSZYSTKICH ---\n");
+    log_write("  - Pracownicy: zakoncza prace\n");
+    log_write("  - Generator: zatrzyma generowanie paczek\n");
+    log_write("  - Ciezarowki: dokoncza rozwoz i zakoncza\n\n");
+
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type != DT_DIR) continue;
         
@@ -170,27 +205,22 @@ void wyslij_sigterm_do_wszystkich(void) {
     closedir(dir);
     
     printf("\n✓ Wyslano SIGTERM do %d procesow\n", wyslane);
-    logi("DYSPOZYTOR: Wyslano SIGTERM do %d procesow (zakonczenie przyjmowania)\n", wyslane);
-}
-
-volatile sig_atomic_t g_dyspozytor_zakoncz = 0;
-
-void handler_dyspozytor_sigterm(int sig) {
-    (void)sig;
-    g_dyspozytor_zakoncz = 1;
+    snprintf(buf, sizeof(buf), "DYSPOZYTOR: Wyslano SIGTERM do %d procesow (zakonczenie przyjmowania)\n", wyslane);
+    log_write(buf);
 }
 
 int main(int argc, char *argv[]) {
     printf("=== DYSPOZYTOR MAGAZYNU ===\n");
     
-    if (argc < 3) {
-        fprintf(stderr, "Uzycie: %s shmid_tasma semafor\n", argv[0]);
+    if (argc < 4) {
+        fprintf(stderr, "Uzycie: %s shmid_tasma semafor log_dir\n", argv[0]);
         return 1;
     }
     
     g_id_tasma = atoi(argv[1]);
     g_semafor = atoi(argv[2]);
-    
+    strncpy(g_log_dir, argv[3], sizeof(g_log_dir) - 1);
+
     g_tasma = (Tasma *)shmat(g_id_tasma, NULL, 0);
     if (g_tasma == (Tasma *)(-1)) {
         perror("shmat tasma");
@@ -201,12 +231,17 @@ int main(int argc, char *argv[]) {
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = handler_dyspozytor_sigterm;
     sigaction(SIGTERM, &sa, NULL);
+
+    char buf[128];
+    log_init(g_semafor, "dyspozytor.log", COL_RED);
+    sem_log_init();
+    log_write("Dyspozytor start\n");
     
-    otworz_plik_wyniki(g_semafor);
-    logi("DYSPOZYTOR: Uruchomiony (PID %d)\n", getpid());
-    
-    printf("Polaczono z systemem (tasma shmid=%d, semafor=%d)\n", g_id_tasma, g_semafor);
-    
+    snprintf(buf, sizeof(buf),"DYSPOZYTOR: Uruchomiony (PID %d)\n", getpid());
+    log_write(buf);
+    snprintf(buf, sizeof(buf),"Polaczono z systemem (tasma shmid=%d, semafor=%d)\n", g_id_tasma, g_semafor);
+    log_write(buf);
+
     char komenda;
     int running = 1;
     
@@ -227,7 +262,8 @@ int main(int argc, char *argv[]) {
                 break;
                 
             case '3':
-                printf("Wysylam sygnal zakonczenia przyjmowania...\n");
+                snprintf(buf, sizeof(buf),"Wysylam sygnal zakonczenia przyjmowania...\n");
+                log_write(buf);
                 wyslij_sigterm_do_wszystkich();
                 break;
                 
@@ -238,19 +274,23 @@ int main(int argc, char *argv[]) {
                 
             case 'q':
             case 'Q':
-                printf("Zamykam dyspozytora...\n");
+                snprintf(buf, sizeof(buf),"Zamykam dyspozytora...\n");
+                log_write(buf);
                 running = 0;
                 break;
                 
             default:
-                printf("Nieznana komenda: %c\n", komenda);
+                snprintf(buf, sizeof(buf),"Nieznana komenda: %c\n", komenda);
+                log_write(buf);
                 break;
         }
     }
     
-    shmdt(g_tasma);
-    zamknij_plik_wyniki();
-    
-    printf("Dyspozytor zakonczyl prace.\n");
+    shmdt(g_tasma);    
+    snprintf(buf, sizeof(buf),"Dyspozytor zakonczyl prace.\n");
+    log_write(buf);
+    sem_log_close();
+    log_close();
+    printf("Dyspozytor zakonczyl.\n");
     return 0;
 }
