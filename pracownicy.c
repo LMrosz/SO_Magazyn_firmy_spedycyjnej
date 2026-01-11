@@ -61,7 +61,6 @@ int main(int argc, char *argv[]) {
         int ile_oczekujacych = 0;
         
         while (!g_zakoncz_prace) {
-            // Jeśli nie mamy paczek, czekaj na sygnał
             if (ile_oczekujacych == 0) {
                 if (!g_dostarcz_ekspres) {
                     pause();
@@ -71,8 +70,6 @@ int main(int argc, char *argv[]) {
                 
                 g_dostarcz_ekspres = 0;
                 log_write("Pracownik P4: Otrzymano polecenie dostarczenia paczek ekspresowych!\n");
-                
-                // Zbierz WSZYSTKIE ekspresowe z magazynu
                 semafor_p(semafor, SEMAFOR_MAGAZYN);
                 
                 int liczba_ekspres = 0;
@@ -110,27 +107,20 @@ int main(int argc, char *argv[]) {
                 snprintf(buf, sizeof(buf),"Pracownik P4: Zebrano %d paczek ekspresowych z magazynu.\n", ile_oczekujacych);
                 log_write(buf);
             }
-            
-            // ========== MAMY PACZKI - CZEKAJ NA CIĘŻARÓWKĘ ==========
             snprintf(buf, sizeof(buf),"Pracownik P4: Mam %d paczek ekspres, czekam na ciezarowke...\n", ile_oczekujacych);
             log_write(buf);
-            
-            // Czekaj aż ciężarówka zasygnalizuje gotowość (V na SEMAFOR_P4_CZEKA)
             semafor_p(semafor, SEMAFOR_P4_CZEKA);
             
             if (g_zakoncz_prace) break;
             
-            // Sprawdź czy jest ciężarówka
             semafor_p(semafor, SEMAFOR_TASMA);
             pid_t ciezarowka_pid = tasma->ciezarowka;
             semafor_v(semafor, SEMAFOR_TASMA);
             
             if (ciezarowka_pid == 0) {
-                // Fałszywy alarm - kontynuuj czekanie
                 continue;
             }
-            
-            // Sprawdź czy przyszedł nowy sygnał - dobierz paczki
+        
             if (g_dostarcz_ekspres) {
                 g_dostarcz_ekspres = 0;
                 log_write("Pracownik P4: Nowy sygnal - dobieram paczki z magazynu!\n");
@@ -156,7 +146,6 @@ int main(int argc, char *argv[]) {
                  ciezarowka_pid, ile_oczekujacych);
             log_write(buf);
             
-            // Przygotuj okienko
             semafor_p(semafor, SEMAFOR_EXPRESS);
             
             okienko->ciezarowka_pid = ciezarowka_pid;
@@ -175,23 +164,20 @@ int main(int argc, char *argv[]) {
             
             semafor_v(semafor, SEMAFOR_EXPRESS);
             
-            // Poczekaj aż ciężarówka odbierze
             int paczki_przed = ile_oczekujacych;
             int timeout = 0;
             
-            while (!g_zakoncz_prace && timeout < 600) { // max 60 sekund
+            while (!g_zakoncz_prace && timeout < 600) {
                 semafor_p(semafor, SEMAFOR_EXPRESS);
                 int pozostalo = okienko->ilosc;
                 int gotowe = okienko->gotowe;
                 semafor_v(semafor, SEMAFOR_EXPRESS);
                 
-                // Sprawdź czy ciężarówka nadal jest
                 semafor_p(semafor, SEMAFOR_TASMA);
                 pid_t aktualna = tasma->ciezarowka;
                 semafor_v(semafor, SEMAFOR_TASMA);
                 
                 if (pozostalo == 0 && gotowe == 0) {
-                    // Wszystko odebrane!
                     snprintf(buf, sizeof(buf),"Pracownik P4: Ciezarowka odebrala wszystkie %d paczek!\n", paczki_przed);
                     log_write(buf);
                     ile_oczekujacych = 0;
@@ -199,11 +185,9 @@ int main(int argc, char *argv[]) {
                 }
                 
                 if (aktualna != ciezarowka_pid && pozostalo > 0) {
-                    // Ciężarówka odjechała - zostały paczki
                     snprintf(buf, sizeof(buf),"Pracownik P4: Ciezarowka odjechala, zostalo %d paczek - szukam nastepnej.\n", pozostalo);
                     log_write(buf);
-                    
-                    // Przenieś pozostałe z okienka
+    
                     semafor_p(semafor, SEMAFOR_EXPRESS);
                     ile_oczekujacych = 0;
                     for (int i = 0; i < okienko->ilosc; i++) {
@@ -213,10 +197,10 @@ int main(int argc, char *argv[]) {
                     okienko->gotowe = 0;
                     okienko->ciezarowka_pid = 0;
                     semafor_v(semafor, SEMAFOR_EXPRESS);
-                    break;  // Wróć do początku pętli - czekaj na następną ciężarówkę
+                    break;  
                 }
                 
-                usleep(100000); // 100ms
+                usleep(100000);
                 timeout++;
             }
             
@@ -235,7 +219,6 @@ int main(int argc, char *argv[]) {
             }
         }
         
-        // Zwróć nieodebrane paczki do magazynu
         if (ile_oczekujacych > 0) {
             snprintf(buf, sizeof(buf),"Pracownik P4: Zwracam %d nieodebranych paczek do magazynu.\n", ile_oczekujacych);
             log_write(buf);
@@ -251,9 +234,8 @@ int main(int argc, char *argv[]) {
         
         free(paczki_ekspres);
         log_write("Pracownik P4: Koncze prace.\n");
-        
     } else {
-        // ==================== PRACOWNICY 1-3 ====================
+        //PRACOWNICY 1-3
         snprintf(buf, sizeof(buf), "Pracownik %d start (PID %d)\n", id_pracownik, getpid());
         log_write(buf);
 

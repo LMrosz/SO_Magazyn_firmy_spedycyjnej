@@ -118,7 +118,7 @@ void odblokuj_ciezarowki(int liczba_ciezarowek) {
 
 int main() {
     srand(time(NULL));
-    
+    konfiguruj_symulacje();
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = handle_sigint;
@@ -267,12 +267,17 @@ int main() {
     
     char arg_id[10], arg_shm[20], arg_sem[20], arg_shm_tasma[20], arg_shm_okienko[20];
     char arg_weight[20], arg_volume[20], arg_time[10];
+    char arg_interwal[16], arg_paczek_tura[16], arg_procent[16];
     
     generator_pid = fork();
     if (generator_pid == 0) {
         sprintf(arg_shm, "%d", g_id_magazyn);
         sprintf(arg_sem, "%d", g_semafor);
-        execl("./generator", "generator", arg_shm, arg_sem, g_log_dir, NULL);
+        sprintf(arg_interwal, "%d", g_config.interwal_generowania);
+        sprintf(arg_paczek_tura, "%d", g_config.paczek_na_ture);
+        sprintf(arg_procent, "%d", g_config.procent_ekspres);
+        execl("./generator", "generator", arg_shm, arg_sem, g_log_dir,
+              arg_interwal, arg_paczek_tura, arg_procent, NULL);
         perror("execl generator");
         exit(1);
     } else if (generator_pid > 0) {

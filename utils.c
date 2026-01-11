@@ -11,6 +11,132 @@ volatile sig_atomic_t g_dostarcz_ekspres = 0;
 volatile sig_atomic_t g_zakoncz_prace = 0;
 volatile sig_atomic_t g_zakoncz_przyjmowanie = 0;
 
+// Globalna konfiguracja z wartościami domyślnymi
+KonfiguracjaSymulacji g_config = {
+    .liczba_paczek_start = DOMYSLNA_LICZBA_PACZEK_START,
+    .paczek_na_ture = DOMYSLNA_PACZEK_NA_TURE,
+    .interwal_generowania = DOMYSLNY_INTERWAL_GENEROWANIA,
+    .liczba_ciezarowek = DOMYSLNA_LICZBA_CIEZAROWEK,
+    .pojemnosc_ciezarowek = DOMYSLNA_POJEMNOSC_CIEZAROWEK,
+    .waga_ciezarowek = DOMYSLNA_WAGA_CIEZAROWEK,
+    .czas_rozwozu = DOMYSLNY_CZAS_ROZWOZU,
+    .pojemnosc_tasmy = DOMYSLNA_POJEMNOSC_TASMY,
+    .waga_tasmy = DOMYSLNA_WAGA_TASMY,
+    .procent_ekspres = DOMYSLNY_PROCENT_EKSPRES
+};
+
+// FUNKCJA POMOCNICZA - pobieranie wartosci int i walidacja danych
+static int pobierz_int(const char *prompt, int domyslna, int min, int max) {
+    char buf[64];
+    int wartosc;
+    
+    while (1) {
+        printf("%s [%d] (zakres %d-%d): ", prompt, domyslna, min, max);
+        fflush(stdout);
+        
+        if (fgets(buf, sizeof(buf), stdin) == NULL) {
+            return domyslna;
+        }
+        
+        if (buf[0] == '\n') {
+            return domyslna;
+        }
+        
+        char *endptr;
+        wartosc = (int)strtol(buf, &endptr, 10);
+        if (endptr == buf || (*endptr != '\n' && *endptr != '\0')) {
+            printf("  Błąd: Podaj liczbę całkowitą!\n");
+            continue;
+        }
+        
+        if (wartosc < min || wartosc > max) {
+            printf("  Błąd: Wartość musi być w zakresie %d-%d!\n", min, max);
+            continue;
+        }
+        
+        return wartosc;
+    }
+}
+
+void konfiguruj_symulacje(void) {
+    printf("\n");
+    printf("╔══════════════════════════════════════════════════════════════╗\n");
+    printf("║           KONFIGURACJA SYMULACJI MAGAZYNU                    ║\n");
+    printf("║      (naciśnij Enter aby użyć wartości domyślnej)            ║\n");
+    printf("╠══════════════════════════════════════════════════════════════╣\n");
+    printf("║                      PACZKI                                  ║\n");
+    printf("╚══════════════════════════════════════════════════════════════╝\n");
+    
+    g_config.liczba_paczek_start = pobierz_int(
+        "Liczba paczek na start", 
+        DOMYSLNA_LICZBA_PACZEK_START, 0, MAX_PACZEK);
+    
+    g_config.procent_ekspres = pobierz_int(
+        "Procent paczek EXPRESS (%)", 
+        DOMYSLNY_PROCENT_EKSPRES, 0, 100);
+    
+    g_config.paczek_na_ture = pobierz_int(
+        "Liczba paczek generowanych na turę (0 = wyłącz)", 
+        DOMYSLNA_PACZEK_NA_TURE, 0, MAX_PACZEK);
+    
+    g_config.interwal_generowania = pobierz_int(
+        "Interwał generowania paczek (sekundy)", 
+        DOMYSLNY_INTERWAL_GENEROWANIA, 1, 3600);
+    
+    printf("\n╔══════════════════════════════════════════════════════════════╗\n");
+    printf("║                     CIĘŻARÓWKI                               ║\n");
+    printf("╚══════════════════════════════════════════════════════════════╝\n");
+    
+    g_config.liczba_ciezarowek = pobierz_int(
+        "Liczba ciężarówek", 
+        DOMYSLNA_LICZBA_CIEZAROWEK, 1, 1000);
+    
+    g_config.waga_ciezarowek = pobierz_int(
+        "Ładowność ciężarówki (kg)", 
+        DOMYSLNA_WAGA_CIEZAROWEK, 1, 100000);
+    
+    g_config.pojemnosc_ciezarowek = pobierz_int(
+        "Pojemność ciężarówki (m³)", 
+        DOMYSLNA_POJEMNOSC_CIEZAROWEK, 1, 1000);
+    
+    g_config.czas_rozwozu = pobierz_int(
+        "Czas rozwozu (sekundy)", 
+        DOMYSLNY_CZAS_ROZWOZU, 1, 3600);
+    
+    printf("\n╔══════════════════════════════════════════════════════════════╗\n");
+    printf("║                       TAŚMA                                  ║\n");
+    printf("╚══════════════════════════════════════════════════════════════╝\n");
+    
+    g_config.pojemnosc_tasmy = pobierz_int(
+        "Pojemność taśmy (liczba paczek)", 
+        DOMYSLNA_POJEMNOSC_TASMY, 1, MAX_POJEMNOSC_TASMY);
+  
+    g_config.waga_tasmy = pobierz_int(
+        "Maksymalna waga na taśmie (kg)", 
+        DOMYSLNA_WAGA_TASMY, 1, 1000000);
+    
+    printf("\n╔══════════════════════════════════════════════════════════════╗\n");
+    printf("║                 PODSUMOWANIE KONFIGURACJI                    ║\n");
+    printf("╠══════════════════════════════════════════════════════════════╣\n");
+    printf("║ Paczki na start: %-6d    Procent EXPRESS: %-3d%%            ║\n", 
+           g_config.liczba_paczek_start, g_config.procent_ekspres);
+    printf("║ Paczek/turę: %-6d         Interwał: %-4d s                  ║\n", 
+           g_config.paczek_na_ture, g_config.interwal_generowania);
+    printf("╠══════════════════════════════════════════════════════════════╣\n");
+    printf("║ Ciężarówek: %-6d          Ładowność: %-6d kg              ║\n", 
+           g_config.liczba_ciezarowek, g_config.waga_ciezarowek);
+    printf("║ Pojemność: %-4d m³          Czas rozwozu: %-4d s             ║\n", 
+           g_config.pojemnosc_ciezarowek, g_config.czas_rozwozu);
+    printf("╠══════════════════════════════════════════════════════════════╣\n");
+    printf("║ Pojemność taśmy: %-4d paczek    Maks. waga: %-7d kg       ║\n", 
+           g_config.pojemnosc_tasmy, g_config.waga_tasmy);
+    printf("╚══════════════════════════════════════════════════════════════╝\n\n");
+    
+    printf("Naciśnij Enter aby rozpocząć symulację...");
+    getchar();
+    printf("\n");
+}
+
 //FUNKCJE POMOCNICZE - zapis na ekran i do plikow
 void log_timestamp(char *buf, int size) {
     struct timeval tv;
@@ -282,17 +408,17 @@ Paczka generuj_pojedyncza_paczke(int id) {
             break;
     }
     p.waga = round(p.waga * 1000) / 1000.0;
-    p.priorytet = (rand() % 100 < 40) ? EXPRES : ZWYKLA; // szanse na express
+    p.priorytet = (rand() % 100 < g_config.procent_ekspres) ? EXPRES : ZWYKLA;
     char buf[256];
 
-    snprintf(buf, sizeof(buf),"Paczka %d  |  Typ paczki: %s  |  Objetosc paczki: %lf  |  Waga paczki: %lf\n",p.id,p.priorytet == EXPRES ? "EKSPRES" : "zwykla",p.objetosc, p.waga);
+    snprintf(buf, sizeof(buf),"Paczka %d | Typ: %s | Objetosc: %lf | Waga: %lf\n",p.id,p.priorytet == EXPRES ? "EKSPRES" : "zwykla",p.objetosc, p.waga);
     log_write(buf);
     return p;
 }
 
 // Generuje początkowy zestaw paczek
 Paczka* generuj_paczke_poczatkowe(int *liczba_paczek_out, int *nastepne_id) {
-    int liczba_paczek = LICZBA_PACZEK_START;
+    int liczba_paczek = g_config.liczba_paczek_start;
     
     Paczka *magazyn = (Paczka*)malloc(liczba_paczek * sizeof(Paczka));
     if (!magazyn) {
@@ -323,7 +449,7 @@ Paczka* generuj_paczke_poczatkowe(int *liczba_paczek_out, int *nastepne_id) {
     snprintf(buf, sizeof(buf),"W tym ekspresowych: %d\n", ekspresowe);
     log_write(buf);
     snprintf(buf, sizeof(buf),"Generowanie dynamiczne: AKTYWNE (co %d sekund, %d paczek)\n\n", 
-         INTERWAL_GENEROWANIA, PACZEK_NA_TURE);
+         g_config.interwal_generowania, g_config.paczek_na_ture);
     log_write(buf);
 
     return magazyn;
@@ -334,8 +460,8 @@ void generuj_tasme(Tasma* tasma) {
     tasma->tail = 0;
     tasma->aktualna_ilosc = 0;
     tasma->aktualna_waga = 0;
-    tasma->max_pojemnosc = POJEMNOSC_TASMY;
-    tasma->max_waga = WAGA_TASMY;
+    tasma->max_pojemnosc = g_config.pojemnosc_tasmy;
+    tasma->max_waga = g_config.waga_tasmy;
     tasma->ciezarowka = 0;
 
     char buf[256];
@@ -348,10 +474,10 @@ void generuj_tasme(Tasma* tasma) {
 }
 
 Ciezarowka* generuj_ciezarowke(int *liczba_ciezarowek_out) {
-    int liczba_ciezarowek = LICZBA_CIEZAROWEK;
-    int waga_ciezarowki = WAGA_CIEZAROWEK;
-    int pojemnosc_ciezarowki = POJEMNOSC_CIEZAROWEK;
-    time_t czas_ciezarowki = CZAS_ROZWOZU;
+    int liczba_ciezarowek = g_config.liczba_ciezarowek;
+    int waga_ciezarowki = g_config.waga_ciezarowek;
+    int pojemnosc_ciezarowki = g_config.pojemnosc_ciezarowek;
+    time_t czas_ciezarowki = g_config.czas_rozwozu;
     
     Ciezarowka *ciezarowki = (Ciezarowka*)malloc(liczba_ciezarowek * sizeof(Ciezarowka));
     if (!ciezarowki) {

@@ -70,21 +70,15 @@ int main(int argc, char *argv[]) {
         snprintf(buf, sizeof(buf),"Ciezarowka %d (PID %d) zajela stanowisko.\n", id_ciezarowki, getpid());
         log_write(buf);
         g_odjedz_niepelna = 0;
-        
-        // Powiadom P4 że ciężarówka jest gotowa
+
         semafor_v(semafor, SEMAFOR_P4_CZEKA);
-        
+    
         while (!g_odjedz_niepelna && !g_zakoncz_prace) {
-            
-            // ============ SPRAWDŹ PACZKI EXPRESS ============
             semafor_p(semafor, SEMAFOR_EXPRESS);
             
-            // Sprawdź czy są paczki express DLA MNIE lub NICZYJE
             if (okienko->gotowe && 
                 (okienko->ciezarowka_pid == getpid() || okienko->ciezarowka_pid == 0) &&
                 okienko->ilosc > 0) {
-                
-                // Przejmij jeśli niczyje
                 if (okienko->ciezarowka_pid == 0) {
                     okienko->ciezarowka_pid = getpid();
                 }
@@ -126,14 +120,11 @@ int main(int argc, char *argv[]) {
                     snprintf(buf, sizeof(buf),"Ciezarowka %d: Odebrano %d ekspres, brak miejsca na reszte (%d).\n",
                          id_ciezarowki, odebrane, okienko->ilosc);
                     log_write(buf);
-                    okienko->ciezarowka_pid = 0; // Zwolnij dla następnej ciężarówki
+                    okienko->ciezarowka_pid = 0;
                 }
             }
             
             semafor_v(semafor, SEMAFOR_EXPRESS);
-            
-            // ============ SPRAWDŹ CZY PEŁNA PO EXPRESS ============
-            // Sprawdź czy po załadunku express ciężarówka jest już pełna
             semafor_p(semafor, SEMAFOR_TASMA);
             int jest_paczka = (tasma->aktualna_ilosc > 0);
             Paczka nastepna;
@@ -143,7 +134,6 @@ int main(int argc, char *argv[]) {
             semafor_v(semafor, SEMAFOR_TASMA);
             
             if (jest_paczka) {
-                // Sprawdź czy następna paczka się zmieści
                 if (waga + nastepna.waga > dopuszczalna_waga ||
                     !czy_pojemnosc(nastepna.typ, dopuszczalna_pojemnosc - pojemnosc)) {
                     snprintf(buf, sizeof(buf),"Ciezarowka %d: Pelna (%.2f/%d kg, %.2f/%d m3) - odjezdza.\n", 
@@ -152,8 +142,7 @@ int main(int argc, char *argv[]) {
                     break;
                 }
             }
-            
-            // ============ SPRAWDŹ SYGNAŁY ============
+
             if (g_odjedz_niepelna || g_zakoncz_prace || g_zakoncz_przyjmowanie) {
                 if (g_odjedz_niepelna) {
                     snprintf(buf, sizeof(buf),"Ciezarowka %d: Sygnal - odjade niepelna!\n", id_ciezarowki);
@@ -162,7 +151,6 @@ int main(int argc, char *argv[]) {
                 break;
             }
             
-            // ============ CZEKAJ NA PACZKĘ Z TAŚMY ============
             semafor_p(semafor, SEMAFOR_PACZKI);
             
             if (g_odjedz_niepelna || g_zakoncz_prace || g_zakoncz_przyjmowanie) {
@@ -206,9 +194,6 @@ int main(int argc, char *argv[]) {
 
                 semafor_v(semafor, SEMAFOR_WOLNE_MIEJSCA);
                 semafor_v(semafor, SEMAFOR_TASMA);
-                
-                // PO ZAŁADUNKU - wróć na początek pętli żeby sprawdzić express!
-                
             } else {
                 semafor_v(semafor, SEMAFOR_TASMA);
                 semafor_v(semafor, SEMAFOR_PACZKI);
@@ -218,8 +203,6 @@ int main(int argc, char *argv[]) {
                 break;
             }
         }
-        
-        // ============ PRZED ODJAZDEM - OSTATNIA SZANSA NA EXPRESS ============
         semafor_p(semafor, SEMAFOR_EXPRESS);
         
         if (okienko->gotowe && 
@@ -267,14 +250,10 @@ int main(int argc, char *argv[]) {
         }
         
         semafor_v(semafor, SEMAFOR_EXPRESS);
-        
-        // Zwolnij stanowisko
         semafor_p(semafor, SEMAFOR_TASMA);
         tasma->ciezarowka = 0;
         semafor_v(semafor, SEMAFOR_TASMA);
         semafor_v(semafor, SEMAFOR_CIEZAROWKI);
-        
-        // Rozwóz
         if (liczba_paczek_c > 0) {
             snprintf(buf, sizeof(buf),"Ciezarowka %d ODJEZDZA: %.2f/%d kg, %d paczek (%d EKSPRES).\n",
                  id_ciezarowki, waga, dopuszczalna_waga, liczba_paczek_c, liczba_ekspres);

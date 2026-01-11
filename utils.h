@@ -29,21 +29,23 @@
 
 //STAŁE?
 #define MAX_PACZEK 10000
+#define MAX_POJEMNOSC_TASMY 500
 #define LICZBA_PRACOWNIKOW 4
 #define MAX_NAZWA_PLIKU 64
 #define MAX_LOG_BUFOR 1024
 #define MAX_EKSPRES MAX_PACZEK   
 
-//DANE DO SYMULACJI
-#define LICZBA_PACZEK_START 1000  // początkowa liczba paczek
-#define PACZEK_NA_TURE 100          // ile paczek generować na turę
-#define INTERWAL_GENEROWANIA 10    // czas generowania nowej tury paczek
-#define LICZBA_CIEZAROWEK 20      // liczba ciezarowek
-#define POJEMNOSC_CIEZAROWEK 1  // pojemnosc ciezarowek w m^3
-#define WAGA_CIEZAROWEK 100     // dopuszczalna waga ciezarowki
-#define CZAS_ROZWOZU 10           // czas rozwozu ciezarowki
-#define POJEMNOSC_TASMY 50        // maksymalna ilosc paczek na tasmie
-#define WAGA_TASMY 1000            // maksymalna waga paczek na tasmie
+//DANE DO SYMULACJI - wartosci domyslne
+#define DOMYSLNA_LICZBA_PACZEK_START 1000
+#define DOMYSLNA_PACZEK_NA_TURE 100
+#define DOMYSLNY_INTERWAL_GENEROWANIA 10
+#define DOMYSLNA_LICZBA_CIEZAROWEK 50
+#define DOMYSLNA_POJEMNOSC_CIEZAROWEK 10
+#define DOMYSLNA_WAGA_CIEZAROWEK 100
+#define DOMYSLNY_CZAS_ROZWOZU 20
+#define DOMYSLNA_POJEMNOSC_TASMY 15
+#define DOMYSLNA_WAGA_TASMY 1000
+#define DOMYSLNY_PROCENT_EKSPRES 25          
 
 //SEMAFORY
 #define SEMAFOR_MAGAZYN 0        // dostep do magazynu (mutex)
@@ -57,9 +59,9 @@
 #define SEMAFOR_P4_CZEKA 8       // P4 czeka na ciężarówkę
 
 //SYGNAŁY DYSPOZYTORRA
-#define SYGNAL_ODJEDZ_NIEPELNA SIGUSR1  // ciezarowka odjezdza z niepełnym ładunkiem
-#define SYGNAL_DOSTARCZ_EKSPRES SIGUSR2 // pracownik 4 dostarcza ładunki express do ciezarowki przy tasmie
-#define SYGNAL_ZAKONCZ_PRZYJMOWANIE SIGTERM          // zakonczenie pracy
+#define SYGNAL_ODJEDZ_NIEPELNA SIGUSR1      // ciezarowka odjezdza z niepełnym ładunkiem
+#define SYGNAL_DOSTARCZ_EKSPRES SIGUSR2     // pracownik 4 dostarcza ładunki express do ciezarowki przy tasmie
+#define SYGNAL_ZAKONCZ_PRZYJMOWANIE SIGTERM // zakonczenie pracy
 
 //KOLORY ANSI
 #define COL_RESET   "\033[0m"
@@ -97,7 +99,7 @@ typedef struct {
 } Magazyn_wspolny;
 
 typedef struct {
-    Paczka bufor[POJEMNOSC_TASMY];
+    Paczka bufor[MAX_POJEMNOSC_TASMY];
     int head;
     int tail;
     int aktualna_ilosc;
@@ -122,11 +124,25 @@ typedef struct {
     int gotowe;
 } OkienkoEkspresShm;
 
+typedef struct {
+    int liczba_paczek_start;
+    int paczek_na_ture;
+    int interwal_generowania;
+    int liczba_ciezarowek;
+    int pojemnosc_ciezarowek;
+    int waga_ciezarowek;
+    int czas_rozwozu;
+    int pojemnosc_tasmy;
+    int waga_tasmy;
+    int procent_ekspres;
+} KonfiguracjaSymulacji;
+
 //ZMIENNE GLOBALNE
 extern int g_fd_log;
 extern int g_semafor_log;
 extern char g_log_dir[MAX_NAZWA_PLIKU];
 extern const char *g_log_kolor;
+extern KonfiguracjaSymulacji g_config;
 
 //ZMIENNE GLOBALNE DO OBSŁUGI SYGNAŁÓW - FLAGI
 //zmienna globalna ktora nie jest przechowywana w pamieci "volatile" moze byc zmieniona w dowolnym momecie
@@ -172,6 +188,7 @@ static inline bool czy_pojemnosc(TypPaczki typ, double wolne_miejsce) {
 }
 
 //DEKLARACJE FUNKCJI
+void konfiguruj_symulacje(void); //konfiguracja symulacji
 // Semafory
 int utworz_nowy_semafor(void);
 void usun_semafor(int sem_id);

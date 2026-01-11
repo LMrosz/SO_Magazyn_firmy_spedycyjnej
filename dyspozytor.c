@@ -173,17 +173,13 @@ void wyslij_sigterm_do_wszystkich(void) {
     }
     
     closedir(dir);
-    
-    // Odblokuj P4
+
     semafor_v(g_semafor, SEMAFOR_P4_CZEKA);
-    
-    // Odblokuj ciężarówki które mogą czekać na semaforach
     for (int i = 0; i < liczba_ciezarowek; i++) {
         semafor_v(g_semafor, SEMAFOR_PACZKI);
         semafor_v(g_semafor, SEMAFOR_CIEZAROWKI);
     }
     
-    // Odblokuj pracowników którzy mogą czekać na WOLNE_MIEJSCA
     for (int i = 0; i < LICZBA_PRACOWNIKOW; i++) {
         semafor_v(g_semafor, SEMAFOR_WOLNE_MIEJSCA);
     }
@@ -249,6 +245,7 @@ int main(int argc, char *argv[]) {
                 snprintf(buf, sizeof(buf),"Wysylam sygnal zakonczenia przyjmowania...\n");
                 log_write(buf);
                 wyslij_sigterm_do_wszystkich();
+                running = 0;
                 break;
                 
             case 'q':
