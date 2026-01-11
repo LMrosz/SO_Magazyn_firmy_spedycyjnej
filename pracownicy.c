@@ -58,104 +58,202 @@ int main(int argc, char *argv[]) {
             return 1;
         }
         
-        while (!g_zakoncz_prace) {
-            if (!g_dostarcz_ekspres) {
-                pause();
-                if (g_zakoncz_prace) break;
-                continue;
-            }
-            
-            g_dostarcz_ekspres = 0;
-            log_write("Pracownik P4: Otrzymano polecenie dostarczenia paczek ekspresowych!\n");
-            semafor_p(semafor, SEMAFOR_TASMA);
-            pid_t ciezarowka_pid = tasma->ciezarowka;
-            semafor_v(semafor, SEMAFOR_TASMA);
+        int ile_oczekujacych = 0;
         
-            if (ciezarowka_pid == 0) {
-                log_write("Pracownik P4: Brak ciezarowki przy tasmie!\n");
-                continue;
-            }
-            
-            int ile = 0;
-            
-            semafor_p(semafor, SEMAFOR_MAGAZYN);
-            int liczba_ekspres = 0;
-            for (int i = 0; i < wspolny->liczba_paczek; i++) {
-                if (wspolny->magazyn[i].priorytet == EXPRES) {
-                    liczba_ekspres++;
+        while (!g_zakoncz_prace) {
+            // Jeśli nie mamy paczek, czekaj na sygnał
+            if (ile_oczekujacych == 0) {
+                if (!g_dostarcz_ekspres) {
+                    pause();
+                    if (g_zakoncz_prace) break;
+                    if (!g_dostarcz_ekspres) continue;
                 }
-            }
-            if (liczba_ekspres > pojemnosc_tablicy) {
-                pojemnosc_tablicy = liczba_ekspres + 50;
-                Paczka *nowa = realloc(paczki_ekspres, pojemnosc_tablicy * sizeof(Paczka));
-                if (!nowa) {
-                    log_write("Pracownik P4: Blad realokacji pamieci!\n");
-                    semafor_v(semafor, SEMAFOR_MAGAZYN);
-                    continue;
-                }
-                paczki_ekspres = nowa;
-            }
-
-            for (int i = wspolny->liczba_paczek - 1; i >= 0; i--) {
-                if (wspolny->magazyn[i].priorytet == EXPRES) {
-                    paczki_ekspres[ile++] = wspolny->magazyn[i];
-                    wspolny->magazyn[i] = wspolny->magazyn[--wspolny->liczba_paczek];
-                }
-            }
-            semafor_v(semafor, SEMAFOR_MAGAZYN);
-            
-            if (ile == 0) {
-                log_write("Pracownik P4: Brak paczek ekspresowych w magazynie!\n");
-                continue;
-            }
-            
-            snprintf(buf, sizeof(buf),"Pracownik P4: Znalazlem %d paczek ekspresowych, dostarczam...\n", ile);
-            log_write(buf);
-            semafor_p(semafor, SEMAFOR_EXPRESS);
-            semafor_p(semafor, SEMAFOR_TASMA);
-            
-            if (tasma->ciezarowka != ciezarowka_pid) {
-                semafor_v(semafor, SEMAFOR_TASMA);
-                semafor_v(semafor, SEMAFOR_EXPRESS);
+                
+                g_dostarcz_ekspres = 0;
+                log_write("Pracownik P4: Otrzymano polecenie dostarczenia paczek ekspresowych!\n");
+                
+                // Zbierz WSZYSTKIE ekspresowe z magazynu
                 semafor_p(semafor, SEMAFOR_MAGAZYN);
-                for (int i = 0; i < ile; i++) {
-                    if (wspolny->liczba_paczek < MAX_PACZEK) {
-                        wspolny->magazyn[wspolny->liczba_paczek++] = paczki_ekspres[i];
+                
+                int liczba_ekspres = 0;
+                for (int i = 0; i < wspolny->liczba_paczek; i++) {
+                    if (wspolny->magazyn[i].priorytet == EXPRES) {
+                        liczba_ekspres++;
+                    }
+                }
+                
+                if (liczba_ekspres > pojemnosc_tablicy) {
+                    pojemnosc_tablicy = liczba_ekspres + 50;
+                    Paczka *nowa = realloc(paczki_ekspres, pojemnosc_tablicy * sizeof(Paczka));
+                    if (!nowa) {
+                        log_write("Pracownik P4: Blad realokacji pamieci!\n");
+                        semafor_v(semafor, SEMAFOR_MAGAZYN);
+                        continue;
+                    }
+                    paczki_ekspres = nowa;
+                }
+
+                ile_oczekujacych = 0;
+                for (int i = wspolny->liczba_paczek - 1; i >= 0; i--) {
+                    if (wspolny->magazyn[i].priorytet == EXPRES) {
+                        paczki_ekspres[ile_oczekujacych++] = wspolny->magazyn[i];
+                        wspolny->magazyn[i] = wspolny->magazyn[--wspolny->liczba_paczek];
                     }
                 }
                 semafor_v(semafor, SEMAFOR_MAGAZYN);
                 
-                snprintf(buf, sizeof(buf),"Pracownik P4: Ciezarowka odjechala, zwracam %d paczek do magazynu.\n", ile);
+                if (ile_oczekujacych == 0) {
+                    log_write("Pracownik P4: Brak paczek ekspresowych w magazynie!\n");
+                    continue;
+                }
+                
+                snprintf(buf, sizeof(buf),"Pracownik P4: Zebrano %d paczek ekspresowych z magazynu.\n", ile_oczekujacych);
                 log_write(buf);
+            }
+            
+            // ========== MAMY PACZKI - CZEKAJ NA CIĘŻARÓWKĘ ==========
+            snprintf(buf, sizeof(buf),"Pracownik P4: Mam %d paczek ekspres, czekam na ciezarowke...\n", ile_oczekujacych);
+            log_write(buf);
+            
+            // Czekaj aż ciężarówka zasygnalizuje gotowość (V na SEMAFOR_P4_CZEKA)
+            semafor_p(semafor, SEMAFOR_P4_CZEKA);
+            
+            if (g_zakoncz_prace) break;
+            
+            // Sprawdź czy jest ciężarówka
+            semafor_p(semafor, SEMAFOR_TASMA);
+            pid_t ciezarowka_pid = tasma->ciezarowka;
+            semafor_v(semafor, SEMAFOR_TASMA);
+            
+            if (ciezarowka_pid == 0) {
+                // Fałszywy alarm - kontynuuj czekanie
                 continue;
             }
-            semafor_v(semafor, SEMAFOR_TASMA);
+            
+            // Sprawdź czy przyszedł nowy sygnał - dobierz paczki
+            if (g_dostarcz_ekspres) {
+                g_dostarcz_ekspres = 0;
+                log_write("Pracownik P4: Nowy sygnal - dobieram paczki z magazynu!\n");
+                
+                semafor_p(semafor, SEMAFOR_MAGAZYN);
+                for (int i = wspolny->liczba_paczek - 1; i >= 0; i--) {
+                    if (wspolny->magazyn[i].priorytet == EXPRES) {
+                        if (ile_oczekujacych >= pojemnosc_tablicy) {
+                            pojemnosc_tablicy += 50;
+                            paczki_ekspres = realloc(paczki_ekspres, pojemnosc_tablicy * sizeof(Paczka));
+                        }
+                        paczki_ekspres[ile_oczekujacych++] = wspolny->magazyn[i];
+                        wspolny->magazyn[i] = wspolny->magazyn[--wspolny->liczba_paczek];
+                    }
+                }
+                semafor_v(semafor, SEMAFOR_MAGAZYN);
+                
+                snprintf(buf, sizeof(buf),"Pracownik P4: Teraz mam %d paczek ekspres.\n", ile_oczekujacych);
+                log_write(buf);
+            }
+            
+            snprintf(buf, sizeof(buf),"Pracownik P4: Znalazlem ciezarowke PID %d, dostarczam %d paczek...\n", 
+                 ciezarowka_pid, ile_oczekujacych);
+            log_write(buf);
+            
+            // Przygotuj okienko
+            semafor_p(semafor, SEMAFOR_EXPRESS);
+            
             okienko->ciezarowka_pid = ciezarowka_pid;
             okienko->ilosc = 0;
             okienko->gotowe = 0;
             
-            for (int i = 0; i < ile; i++) {
+            for (int i = 0; i < ile_oczekujacych; i++) {
                 okienko->paczki[okienko->ilosc++] = paczki_ekspres[i];
-                snprintf(buf, sizeof(buf),"Pracownik P4: Wlozyl EKSPRES ID %d (%.2f kg) do okienka [%d/%d]\n",
-                     paczki_ekspres[i].id, paczki_ekspres[i].waga, i + 1, ile);
-                log_write(buf);
             }
             
             okienko->gotowe = 1;
             
+            snprintf(buf, sizeof(buf),"Pracownik P4: Przygotowal %d paczek ekspres dla ciezarowki PID %d.\n", 
+                 ile_oczekujacych, ciezarowka_pid);
+            log_write(buf);
+            
             semafor_v(semafor, SEMAFOR_EXPRESS);
             
-            snprintf(buf, sizeof(buf),"Pracownik P4: Dostarczono WSZYSTKIE %d paczek ekspresowych.\n", ile);
+            // Poczekaj aż ciężarówka odbierze
+            int paczki_przed = ile_oczekujacych;
+            int timeout = 0;
+            
+            while (!g_zakoncz_prace && timeout < 600) { // max 60 sekund
+                semafor_p(semafor, SEMAFOR_EXPRESS);
+                int pozostalo = okienko->ilosc;
+                int gotowe = okienko->gotowe;
+                semafor_v(semafor, SEMAFOR_EXPRESS);
+                
+                // Sprawdź czy ciężarówka nadal jest
+                semafor_p(semafor, SEMAFOR_TASMA);
+                pid_t aktualna = tasma->ciezarowka;
+                semafor_v(semafor, SEMAFOR_TASMA);
+                
+                if (pozostalo == 0 && gotowe == 0) {
+                    // Wszystko odebrane!
+                    snprintf(buf, sizeof(buf),"Pracownik P4: Ciezarowka odebrala wszystkie %d paczek!\n", paczki_przed);
+                    log_write(buf);
+                    ile_oczekujacych = 0;
+                    break;
+                }
+                
+                if (aktualna != ciezarowka_pid && pozostalo > 0) {
+                    // Ciężarówka odjechała - zostały paczki
+                    snprintf(buf, sizeof(buf),"Pracownik P4: Ciezarowka odjechala, zostalo %d paczek - szukam nastepnej.\n", pozostalo);
+                    log_write(buf);
+                    
+                    // Przenieś pozostałe z okienka
+                    semafor_p(semafor, SEMAFOR_EXPRESS);
+                    ile_oczekujacych = 0;
+                    for (int i = 0; i < okienko->ilosc; i++) {
+                        paczki_ekspres[ile_oczekujacych++] = okienko->paczki[i];
+                    }
+                    okienko->ilosc = 0;
+                    okienko->gotowe = 0;
+                    okienko->ciezarowka_pid = 0;
+                    semafor_v(semafor, SEMAFOR_EXPRESS);
+                    break;  // Wróć do początku pętli - czekaj na następną ciężarówkę
+                }
+                
+                usleep(100000); // 100ms
+                timeout++;
+            }
+            
+            if (timeout >= 600 && ile_oczekujacych > 0) {
+                log_write("Pracownik P4: Timeout - szukam nastepnej ciezarowki.\n");
+                
+                semafor_p(semafor, SEMAFOR_EXPRESS);
+                ile_oczekujacych = okienko->ilosc;
+                for (int i = 0; i < okienko->ilosc; i++) {
+                    paczki_ekspres[i] = okienko->paczki[i];
+                }
+                okienko->ilosc = 0;
+                okienko->gotowe = 0;
+                okienko->ciezarowka_pid = 0;
+                semafor_v(semafor, SEMAFOR_EXPRESS);
+            }
+        }
+        
+        // Zwróć nieodebrane paczki do magazynu
+        if (ile_oczekujacych > 0) {
+            snprintf(buf, sizeof(buf),"Pracownik P4: Zwracam %d nieodebranych paczek do magazynu.\n", ile_oczekujacych);
             log_write(buf);
+            
+            semafor_p(semafor, SEMAFOR_MAGAZYN);
+            for (int i = 0; i < ile_oczekujacych; i++) {
+                if (wspolny->liczba_paczek < MAX_PACZEK) {
+                    wspolny->magazyn[wspolny->liczba_paczek++] = paczki_ekspres[i];
+                }
+            }
+            semafor_v(semafor, SEMAFOR_MAGAZYN);
         }
         
         free(paczki_ekspres);
         log_write("Pracownik P4: Koncze prace.\n");
         
     } else {
-        int proby_pustego_magazynu = 0;
-        const int MAX_PROB = 5;
-
+        // ==================== PRACOWNICY 1-3 ====================
         snprintf(buf, sizeof(buf), "Pracownik %d start (PID %d)\n", id_pracownik, getpid());
         log_write(buf);
 
@@ -171,8 +269,6 @@ int main(int argc, char *argv[]) {
             }
             
             if (znaleziono_indeks >= 0) {
-                proby_pustego_magazynu = 0;
-                
                 Paczka paczka = wspolny->magazyn[znaleziono_indeks];
                 wspolny->magazyn[znaleziono_indeks] = wspolny->magazyn[--wspolny->liczba_paczek];
                 
@@ -182,6 +278,12 @@ int main(int argc, char *argv[]) {
 
                 semafor_v(semafor, SEMAFOR_MAGAZYN);
                 semafor_p(semafor, SEMAFOR_WOLNE_MIEJSCA);
+                
+                if (g_zakoncz_prace) {
+                    semafor_v(semafor, SEMAFOR_WOLNE_MIEJSCA);
+                    break;
+                }
+                
                 semafor_p(semafor, SEMAFOR_TASMA);
                 
                 while ((tasma->aktualna_waga + paczka.waga) > tasma->max_waga && !g_zakoncz_prace) {
@@ -216,8 +318,7 @@ int main(int argc, char *argv[]) {
                 
             } else {
                 semafor_v(semafor, SEMAFOR_MAGAZYN);
-                proby_pustego_magazynu++;
-
+                
                 semafor_p(semafor, SEMAFOR_MAGAZYN);
                 int generator_aktywny = wspolny->generowanie_aktywne;
                 int pozostalo = wspolny->liczba_paczek;
@@ -229,15 +330,6 @@ int main(int argc, char *argv[]) {
                     break;
                 }
                 
-                if (proby_pustego_magazynu >= MAX_PROB && !generator_aktywny) {
-                    snprintf(buf, sizeof(buf),"Pracownik %d: Koncze prace - brak paczek.\n", id_pracownik);
-                    log_write(buf);
-                    break;
-                }
-                
-                snprintf(buf, sizeof(buf),"Pracownik %d: Brak zwyklych paczek (proba %d/%d), czekam...\n",
-                     id_pracownik, proby_pustego_magazynu, MAX_PROB);
-                log_write(buf);
                 sleep(2);
             }
         }

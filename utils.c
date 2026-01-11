@@ -182,6 +182,7 @@ static const char* nazwa_semafora(int nr) {
         case SEMAFOR_ZAPIS: return "ZAPIS";
         case SEMAFOR_EXPRESS: return "PACZKI_EXPRESS";
         case SEMAFOR_GENERATOR: return "GENERATOR";
+        case SEMAFOR_P4_CZEKA: return "P4_CZEKA";
         default: return "?";
     }
 }
@@ -192,7 +193,7 @@ int utworz_nowy_semafor(void) {
         perror("ftok semafor");
         exit(EXIT_FAILURE);
     }
-    int sem = semget(klucz, 8, 0600 | IPC_CREAT);
+    int sem = semget(klucz, 9, 0600 | IPC_CREAT);
     if (sem == -1) {
         perror("semget");
         exit(EXIT_FAILURE);
@@ -281,7 +282,7 @@ Paczka generuj_pojedyncza_paczke(int id) {
             break;
     }
     p.waga = round(p.waga * 1000) / 1000.0;
-    p.priorytet = (rand() % 100 < 20) ? EXPRES : ZWYKLA; // 20% szans na ekspres
+    p.priorytet = (rand() % 100 < 40) ? EXPRES : ZWYKLA; // szanse na express
     char buf[256];
 
     snprintf(buf, sizeof(buf),"Paczka %d  |  Typ paczki: %s  |  Objetosc paczki: %lf  |  Waga paczki: %lf\n",p.id,p.priorytet == EXPRES ? "EKSPRES" : "zwykla",p.objetosc, p.waga);

@@ -35,15 +35,15 @@
 #define MAX_EKSPRES MAX_PACZEK   
 
 //DANE DO SYMULACJI
-#define LICZBA_PACZEK_START 100   // początkowa liczba paczek
-#define PACZEK_NA_TURE 10          // ile paczek generować na turę
-#define INTERWAL_GENEROWANIA 5    // czas generowania nowej tury paczek
-#define LICZBA_CIEZAROWEK 50      // liczba ciezarowek
-#define POJEMNOSC_CIEZAROWEK 100  // pojemnosc ciezarowek w m^3
-#define WAGA_CIEZAROWEK 1000     // dopuszczalna waga ciezarowki
-#define CZAS_ROZWOZU 60           // czas rozwozu ciezarowki
-#define POJEMNOSC_TASMY 25        // maksymalna ilosc paczek na tasmie
-#define WAGA_TASMY 250            // maksymalna waga paczek na tasmie
+#define LICZBA_PACZEK_START 1000  // początkowa liczba paczek
+#define PACZEK_NA_TURE 100          // ile paczek generować na turę
+#define INTERWAL_GENEROWANIA 10    // czas generowania nowej tury paczek
+#define LICZBA_CIEZAROWEK 20      // liczba ciezarowek
+#define POJEMNOSC_CIEZAROWEK 1  // pojemnosc ciezarowek w m^3
+#define WAGA_CIEZAROWEK 100     // dopuszczalna waga ciezarowki
+#define CZAS_ROZWOZU 10           // czas rozwozu ciezarowki
+#define POJEMNOSC_TASMY 50        // maksymalna ilosc paczek na tasmie
+#define WAGA_TASMY 1000            // maksymalna waga paczek na tasmie
 
 //SEMAFORY
 #define SEMAFOR_MAGAZYN 0        // dostep do magazynu (mutex)
@@ -54,6 +54,7 @@
 #define SEMAFOR_ZAPIS 5          // wypisywanie na ekran i do pliku (mutex)
 #define SEMAFOR_EXPRESS 6        // obsluga paczek ekspresowych
 #define SEMAFOR_GENERATOR 7      // mutex dla generowania nowych paczek
+#define SEMAFOR_P4_CZEKA 8       // P4 czeka na ciężarówkę
 
 //SYGNAŁY DYSPOZYTORRA
 #define SYGNAL_ODJEDZ_NIEPELNA SIGUSR1  // ciezarowka odjezdza z niepełnym ładunkiem
@@ -96,16 +97,6 @@ typedef struct {
 } Magazyn_wspolny;
 
 typedef struct {
-    pid_t pid;
-    int id;
-    double aktualna_waga;
-    double aktualna_pojemnosc;
-    int max_waga;
-    int max_pojemnosc;
-    int liczba_paczek;
-} CiezarowkaInfo;
-
-typedef struct {
     Paczka bufor[POJEMNOSC_TASMY];
     int head;
     int tail;
@@ -114,7 +105,6 @@ typedef struct {
     int max_pojemnosc;
     int max_waga;
     pid_t ciezarowka; //pid ciezarowki przy tasmie
-    CiezarowkaInfo ciezarowka_info;
 } Tasma;
 
 typedef struct {

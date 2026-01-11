@@ -19,50 +19,10 @@ void wyswietl_menu(void) {
     printf("║ 2 - P4 dostarcz WSZYSTKIE ekspres (SIGUSR2)          ║\n");
     printf("║ 3 - Zakoncz przyjmowanie (SIGTERM)                   ║\n");
     printf("║     (pracownicy koncza, ciezarowki rozwoza)          ║\n");
-    printf("║ s - Pokaz status                                     ║\n");
     printf("║ q - Wyjdz z dyspozytora                              ║\n");
     printf("╚══════════════════════════════════════════════════════╝\n");
     printf("Komenda> ");
     fflush(stdout);
-}
-
-void wyswietl_status(void) {
-    char buf[512];
-    
-    if (g_tasma == NULL) {
-        printf("Brak dostepu do tasmy!\n");
-        return;
-    }
-    
-    semafor_p(g_semafor, SEMAFOR_TASMA);
-    
-    printf("\n╔══════════════════ STATUS ══════════════════╗\n");
-    printf("║ TASMA:                                      ║\n");
-    printf("║   Paczki: %d/%d                              \n", 
-           g_tasma->aktualna_ilosc, g_tasma->max_pojemnosc);
-    printf("║   Waga: %.2f/%d kg                           \n",
-           g_tasma->aktualna_waga, g_tasma->max_waga);
-    printf("╠═════════════════════════════════════════════╣\n");
-    
-    if (g_tasma->ciezarowka > 0) {
-        CiezarowkaInfo *ci = &g_tasma->ciezarowka_info;
-        printf("║ CIEZAROWKA PRZY TASMIE:                     ║\n");
-        printf("║   ID: %d (PID %d)                            \n", ci->id, ci->pid);
-        printf("║   Ladunek: %.2f/%d kg                        \n", ci->aktualna_waga, ci->max_waga);
-        printf("║   Pojemnosc: %.2f/%d m3                      \n", ci->aktualna_pojemnosc, ci->max_pojemnosc);
-        printf("║   Paczek: %d                                 \n", ci->liczba_paczek);
-    } else {
-        printf("║ CIEZAROWKA: BRAK                            ║\n");
-    }
-    printf("╚═════════════════════════════════════════════╝\n");
-    
-    snprintf(buf, sizeof(buf), "STATUS: Tasma %d/%d paczek, %.2f/%d kg, Ciezarowka: %s\n",
-             g_tasma->aktualna_ilosc, g_tasma->max_pojemnosc,
-             g_tasma->aktualna_waga, g_tasma->max_waga,
-             g_tasma->ciezarowka > 0 ? "TAK" : "BRAK");
-    log_write(buf);
-    
-    semafor_v(g_semafor, SEMAFOR_TASMA);
 }
 
 pid_t znajdz_ciezarowke_przy_tasmie(void) {
@@ -117,13 +77,19 @@ void wyslij_sigusr1_do_ciezarowki(void) {
     pid_t pid = znajdz_ciezarowke_przy_tasmie();
     
     if (pid > 0) {
-        if (kill(pid, SIGUSR1) == 0) {
-            printf("✓ Wyslano SIGUSR1 do ciezarowki PID %d - odjedzie z niepelnym ladunkiem\n", pid);
-            snprintf(buf, sizeof(buf), "DYSPOZYTOR: Wyslano SIGUSR1 do ciezarowki PID %d\n", pid);
-            log_write(buf);
+        if (kill(pid, 0) == 0) {
+            if (kill(pid, SIGUSR1) == 0) {
+                printf("✓ Wyslano SIGUSR1 do ciezarowki PID %d - odjedzie z niepelnym ladunkiem\n", pid);
+                snprintf(buf, sizeof(buf), "DYSPOZYTOR: Wyslano SIGUSR1 do ciezarowki PID %d\n", pid);
+                log_write(buf);
+            } else {
+                perror("Blad wysylania SIGUSR1");
+                log_write("BLAD: nie udalo sie wyslac SIGUSR1\n");
+            }
         } else {
-            perror("Blad wysylania SIGUSR1");
-            log_write("BLAD: nie udalo sie wyslac SIGUSR1\n");
+            printf("✗ Ciezarowka PID %d juz nie istnieje!\n", pid);
+            snprintf(buf, sizeof(buf), "SIGUSR1: Ciezarowka PID %d juz nie istnieje\n", pid);
+            log_write(buf);
         }
     } else {
         printf("✗ Brak ciezarowki przy tasmie!\n");
@@ -153,6 +119,7 @@ void wyslij_sigusr2_do_p4(void) {
 void wyslij_sigterm_do_wszystkich(void) {
     char buf[256];
     int wyslane = 0;
+    int liczba_ciezarowek = 0;
     DIR *dir = opendir("/proc");
     if (!dir) {
         perror("opendir /proc");
@@ -193,7 +160,10 @@ void wyslij_sigterm_do_wszystkich(void) {
             if (kill((pid_t)pid, SIGTERM) == 0) {
                 const char *typ = "?";
                 if (strstr(cmdline, "pracownicy")) typ = "pracownik";
-                else if (strstr(cmdline, "ciezarowki")) typ = "ciezarowka";
+                else if (strstr(cmdline, "ciezarowki")) {
+                    typ = "ciezarowka";
+                    liczba_ciezarowek++;
+                }
                 else if (strstr(cmdline, "generator")) typ = "generator";
                 
                 printf("  SIGTERM -> PID %ld (%s)\n", pid, typ);
@@ -203,6 +173,20 @@ void wyslij_sigterm_do_wszystkich(void) {
     }
     
     closedir(dir);
+    
+    // Odblokuj P4
+    semafor_v(g_semafor, SEMAFOR_P4_CZEKA);
+    
+    // Odblokuj ciężarówki które mogą czekać na semaforach
+    for (int i = 0; i < liczba_ciezarowek; i++) {
+        semafor_v(g_semafor, SEMAFOR_PACZKI);
+        semafor_v(g_semafor, SEMAFOR_CIEZAROWKI);
+    }
+    
+    // Odblokuj pracowników którzy mogą czekać na WOLNE_MIEJSCA
+    for (int i = 0; i < LICZBA_PRACOWNIKOW; i++) {
+        semafor_v(g_semafor, SEMAFOR_WOLNE_MIEJSCA);
+    }
     
     printf("\n✓ Wyslano SIGTERM do %d procesow\n", wyslane);
     snprintf(buf, sizeof(buf), "DYSPOZYTOR: Wyslano SIGTERM do %d procesow (zakonczenie przyjmowania)\n", wyslane);
@@ -265,11 +249,6 @@ int main(int argc, char *argv[]) {
                 snprintf(buf, sizeof(buf),"Wysylam sygnal zakonczenia przyjmowania...\n");
                 log_write(buf);
                 wyslij_sigterm_do_wszystkich();
-                break;
-                
-            case 's':
-            case 'S':
-                wyswietl_status();
                 break;
                 
             case 'q':

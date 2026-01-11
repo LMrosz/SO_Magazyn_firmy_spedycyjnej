@@ -105,6 +105,17 @@ pid_t uruchom_dyspozytora(int shmid_tasma, int semafor_id) {
     return pid;
 }
 
+void odblokuj_ciezarowki(int liczba_ciezarowek) {
+    for (int i = 0; i < liczba_ciezarowek; i++) {
+        semafor_v(g_semafor, SEMAFOR_PACZKI);
+    }
+    for (int i = 0; i < liczba_ciezarowek; i++) {
+        semafor_v(g_semafor, SEMAFOR_CIEZAROWKI);
+    }
+
+    semafor_v(g_semafor, SEMAFOR_P4_CZEKA);
+}
+
 int main() {
     srand(time(NULL));
     
@@ -129,6 +140,7 @@ int main() {
     ustaw_semafor(g_semafor, SEMAFOR_ZAPIS, 1);
     ustaw_semafor(g_semafor, SEMAFOR_EXPRESS, 1);
     ustaw_semafor(g_semafor, SEMAFOR_GENERATOR, 1);
+    ustaw_semafor(g_semafor, SEMAFOR_P4_CZEKA, 1);
 
     log_init(g_semafor, "magazyn.log", COL_GREEN);
     sem_log_init();
@@ -332,15 +344,14 @@ int main() {
         kill(ciezarowki_pids[i], SIGTERM);
     }
 
-    for (int i = 0; i < liczba_ciezarowek; i++) {
-        semafor_v(g_semafor, SEMAFOR_PACZKI);
-    }
+    odblokuj_ciezarowki(liczba_ciezarowek);
     
     for (int i = 0; i < liczba_ciezarowek; i++) {
         waitpid(ciezarowki_pids[i], NULL, 0);
         snprintf(buf, sizeof(buf),"Ciezarowka %d zakonczyla prace\n", i + 1);
         log_write(buf);
     }
+    log_write("Wszystkie ciezarowki zakonczone.\n");
     
     free(ciezarowki);
     free(ciezarowki_pids);
