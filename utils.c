@@ -1,10 +1,10 @@
 #include "utils.h"
 
 int g_fd_log = -1;
+int g_fd_sem_log = -1;
 int g_semafor_log = -1;
 char g_log_dir[MAX_NAZWA_PLIKU] = "";
 const char *g_log_kolor = COL_RESET;
-static int g_fd_sem_log = -1;
 
 volatile sig_atomic_t g_odjedz_niepelna = 0;
 volatile sig_atomic_t g_dostarcz_ekspres = 0;
@@ -13,7 +13,6 @@ volatile sig_atomic_t g_zakoncz_przyjmowanie = 0;
 
 // Globalna konfiguracja z wartościami domyślnymi
 KonfiguracjaSymulacji g_config = {
-    .liczba_paczek_start = DOMYSLNA_LICZBA_PACZEK_START,
     .paczek_na_ture = DOMYSLNA_PACZEK_NA_TURE,
     .interwal_generowania = DOMYSLNY_INTERWAL_GENEROWANIA,
     .liczba_ciezarowek = DOMYSLNA_LICZBA_CIEZAROWEK,
@@ -67,21 +66,17 @@ void konfiguruj_symulacje(void) {
     printf("║                      PACZKI                                  ║\n");
     printf("╚══════════════════════════════════════════════════════════════╝\n");
     
-    g_config.liczba_paczek_start = pobierz_int(
-        "Liczba paczek na start", 
-        DOMYSLNA_LICZBA_PACZEK_START, 0, MAX_PACZEK);
-    
-    g_config.procent_ekspres = pobierz_int(
-        "Procent paczek EXPRESS (%)", 
-        DOMYSLNY_PROCENT_EKSPRES, 0, 100);
-    
     g_config.paczek_na_ture = pobierz_int(
-        "Liczba paczek generowanych na turę (0 = wyłącz)", 
-        DOMYSLNA_PACZEK_NA_TURE, 0, MAX_PACZEK);
+        "Liczba paczek generowanych na turę", 
+        DOMYSLNA_PACZEK_NA_TURE, 1, MAX_PACZEK);
     
     g_config.interwal_generowania = pobierz_int(
         "Interwał generowania paczek (sekundy)", 
         DOMYSLNY_INTERWAL_GENEROWANIA, 1, 3600);
+
+    g_config.procent_ekspres = pobierz_int(
+        "Procent paczek EXPRESS (%)", 
+        DOMYSLNY_PROCENT_EKSPRES, 0, 100);
     
     printf("\n╔══════════════════════════════════════════════════════════════╗\n");
     printf("║                     CIĘŻARÓWKI                               ║\n");
@@ -89,19 +84,19 @@ void konfiguruj_symulacje(void) {
     
     g_config.liczba_ciezarowek = pobierz_int(
         "Liczba ciężarówek", 
-        DOMYSLNA_LICZBA_CIEZAROWEK, 1, 1000);
+        DOMYSLNA_LICZBA_CIEZAROWEK, 1, MAX_CIEZAROWEK);
     
     g_config.waga_ciezarowek = pobierz_int(
         "Ładowność ciężarówki (kg)", 
-        DOMYSLNA_WAGA_CIEZAROWEK, 1, 100000);
+        DOMYSLNA_WAGA_CIEZAROWEK, 25, 25000);
     
     g_config.pojemnosc_ciezarowek = pobierz_int(
         "Pojemność ciężarówki (m³)", 
-        DOMYSLNA_POJEMNOSC_CIEZAROWEK, 1, 1000);
+        DOMYSLNA_POJEMNOSC_CIEZAROWEK, 1, 100);
     
     g_config.czas_rozwozu = pobierz_int(
         "Czas rozwozu (sekundy)", 
-        DOMYSLNY_CZAS_ROZWOZU, 1, 3600);
+        DOMYSLNY_CZAS_ROZWOZU, 1, 6000);
     
     printf("\n╔══════════════════════════════════════════════════════════════╗\n");
     printf("║                       TAŚMA                                  ║\n");
@@ -113,15 +108,15 @@ void konfiguruj_symulacje(void) {
   
     g_config.waga_tasmy = pobierz_int(
         "Maksymalna waga na taśmie (kg)", 
-        DOMYSLNA_WAGA_TASMY, 1, 1000000);
+        DOMYSLNA_WAGA_TASMY, 25, 10000); 
     
     printf("\n╔══════════════════════════════════════════════════════════════╗\n");
     printf("║                 PODSUMOWANIE KONFIGURACJI                    ║\n");
     printf("╠══════════════════════════════════════════════════════════════╣\n");
-    printf("║ Paczki na start: %-6d    Procent EXPRESS: %-3d%%            ║\n", 
-           g_config.liczba_paczek_start, g_config.procent_ekspres);
-    printf("║ Paczek/turę: %-6d         Interwał: %-4d s                  ║\n", 
+    printf("║ Paczek/turę: %-6d         Interwał: %-4d s                   ║\n", 
            g_config.paczek_na_ture, g_config.interwal_generowania);
+        
+    printf("║ Procent EXPRESS: %-3d%%                                      ║\n",g_config.procent_ekspres);
     printf("╠══════════════════════════════════════════════════════════════╣\n");
     printf("║ Ciężarówek: %-6d          Ładowność: %-6d kg              ║\n", 
            g_config.liczba_ciezarowek, g_config.waga_ciezarowek);
@@ -150,6 +145,8 @@ void log_init(int semafor, const char *nazwa_pliku, const char *kolor) {
     g_semafor_log = semafor;
     g_log_kolor = kolor;
     
+    setvbuf(stdout, NULL, _IONBF, 0);
+    
     if (g_log_dir[0] == '\0') return; 
 
     char sciezka[256];
@@ -175,14 +172,14 @@ void log_write(const char *msg) {
         semafor_p(g_semafor_log, SEMAFOR_ZAPIS);
     }
     
-    write(STDOUT_FILENO, g_log_kolor, strlen(g_log_kolor));
-    write(STDOUT_FILENO, ts, strlen(ts));
-    write(STDOUT_FILENO, msg, strlen(msg));
-    write(STDOUT_FILENO, COL_RESET, strlen(COL_RESET));
+    char full_msg[512];
+    snprintf(full_msg, sizeof(full_msg), "%s%s%s%s", g_log_kolor, ts, msg, COL_RESET);
+    write(STDOUT_FILENO, full_msg, strlen(full_msg));
     
     if (g_fd_log != -1) {
-        write(g_fd_log, ts, strlen(ts));
-        write(g_fd_log, msg, strlen(msg));
+        char file_msg[512];
+        snprintf(file_msg, sizeof(file_msg), "%s%s", ts, msg);
+        write(g_fd_log, file_msg, strlen(file_msg));
     }
     
     if (g_semafor_log != -1) {
@@ -192,7 +189,6 @@ void log_write(const char *msg) {
 
 void sem_log_init(void) {
     if (g_log_dir[0] == '\0') return;
-    
     char sciezka[256];
     snprintf(sciezka, sizeof(sciezka), "%s/semafor.log", g_log_dir);
     g_fd_sem_log = open(sciezka, O_WRONLY | O_CREAT | O_APPEND, 0644);
@@ -210,119 +206,109 @@ void sem_log_write(const char *msg) {
     
     char ts[32];
     log_timestamp(ts, sizeof(ts));
+    char full_msg[256];
+    snprintf(full_msg, sizeof(full_msg), "%s%s", ts, msg);
+    write(g_fd_sem_log, full_msg, strlen(full_msg));
+}
+
+void log_error(const char *msg) {
+    char ts[32];
+    log_timestamp(ts, sizeof(ts));
+    const char *prefix = "[BLAD] ";
     
-    write(g_fd_sem_log, ts, strlen(ts));
-    write(g_fd_sem_log, msg, strlen(msg));
+    if (g_semafor_log != -1) semafor_p(g_semafor_log, SEMAFOR_ZAPIS);
+    char full_msg[512];
+    snprintf(full_msg, sizeof(full_msg), "%s%s%s%s%s", COL_RED, ts, prefix, msg, COL_RESET);
+    write(STDOUT_FILENO, full_msg, strlen(full_msg));
+    
+    if (g_fd_log != -1) {
+        char file_msg[512];
+        snprintf(file_msg, sizeof(file_msg), "%s%s%s", ts, prefix, msg);
+        write(g_fd_log, file_msg, strlen(file_msg));
+    }
+    
+    if (g_semafor_log != -1) semafor_v(g_semafor_log, SEMAFOR_ZAPIS);
 }
 
 //HANDLERY SYGNAŁÓW
-
-void handler_odjedz_niepelna(int sig) {
+void handler_sigusr1(int sig) {
     (void)sig;
     g_odjedz_niepelna = 1;
 }
 
-void handler_dostarcz_ekspres(int sig) {
+void handler_sigusr2(int sig) {
     (void)sig;
     g_dostarcz_ekspres = 1;
 }
 
-void handler_zakoncz(int sig) {
+void handler_sigterm(int sig) {
     (void)sig;
     g_zakoncz_prace = 1;
 }
 
-void handler_zakoncz_przyjmowanie(int sig) {
+void handler_sigterm_ciez(int sig) {
     (void)sig;
     g_zakoncz_przyjmowanie = 1;
 }
 
+static void handler_sigchld(int sig) {
+    (void)sig;
+    int saved_errno = errno;
+    while (waitpid(-1, NULL, WNOHANG) > 0);
+    errno = saved_errno;
+}
+
+void ustaw_handler_sigchld(void) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handler_sigchld;
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &sa, NULL);
+}
+
 void ustaw_handlery_ciezarowka(void) {
     struct sigaction sa;
-    
     memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handler_odjedz_niepelna;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
+    
+    sa.sa_handler = handler_sigusr1;
     sigaction(SIGUSR1, &sa, NULL);
     
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handler_zakoncz_przyjmowanie;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
+    sa.sa_handler = handler_sigterm_ciez;
     sigaction(SIGTERM, &sa, NULL);
-    
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handler_zakoncz;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGINT, &sa, NULL);
-    
-    signal(SIGUSR2, SIG_IGN);
 }
 
-void ustaw_handlery_pracownik(int id_pracownika) {
+void ustaw_handlery_pracownik(int id) {
     struct sigaction sa;
-    
     memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handler_zakoncz;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
+    
+    sa.sa_handler = handler_sigterm;
     sigaction(SIGTERM, &sa, NULL);
     
-    if (id_pracownika == 4) {
-        memset(&sa, 0, sizeof(sa));
-        sa.sa_handler = handler_dostarcz_ekspres;
-        sigemptyset(&sa.sa_mask);
-        sa.sa_flags = 0;
+    if (id == 4) {
+        sa.sa_handler = handler_sigusr2;
         sigaction(SIGUSR2, &sa, NULL);
-    } else {
-        signal(SIGUSR2, SIG_IGN);
     }
-    
-    signal(SIGUSR1, SIG_IGN);
-}
-
-void ustaw_handlery_generator(void) {
-    struct sigaction sa;
-    
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handler_zakoncz;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGINT, &sa, NULL);
-    
-    signal(SIGUSR1, SIG_IGN);
-    signal(SIGUSR2, SIG_IGN);
 }
 
 //FUNKCJE - SEMAFOR
 static const char* nazwa_semafora(int nr) {
     switch(nr) {
-        case SEMAFOR_MAGAZYN: return "MAGAZYN";
         case SEMAFOR_TASMA: return "TASMA";
         case SEMAFOR_WOLNE_MIEJSCA: return "WOLNE_MIEJSCE";
         case SEMAFOR_PACZKI: return "PACZKI_TASMA";
         case SEMAFOR_CIEZAROWKI: return "CIEZAROWKI";
         case SEMAFOR_ZAPIS: return "ZAPIS";
         case SEMAFOR_EXPRESS: return "PACZKI_EXPRESS";
-        case SEMAFOR_GENERATOR: return "GENERATOR";
-        case SEMAFOR_P4_CZEKA: return "P4_CZEKA";
+        case SEMAFOR_ID_COUNTER: return "LICZNIK ID PACZEK";
         default: return "?";
     }
 }
 
 int utworz_nowy_semafor(void) {
-    key_t klucz = ftok(".", 'S');
-    if (klucz == -1) {
-        perror("ftok semafor");
-        exit(EXIT_FAILURE);
-    }
-    int sem = semget(klucz, 9, 0600 | IPC_CREAT);
+    int sem = semget(IPC_PRIVATE, LICZBA_SEMAFOROW, 0600 | IPC_CREAT);
     if (sem == -1) {
         perror("semget");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     char buf[128];
     snprintf(buf, sizeof(buf),"Semafor zostal utworzony : %d\n", sem);
@@ -347,14 +333,13 @@ void usun_semafor(int sem_id) {
 void ustaw_semafor(int sem_id, int nr, int val) {
     if (semctl(sem_id, nr, SETVAL, val) == -1) {
         perror("semctl SETVAL");
-        exit(EXIT_FAILURE);
     }
     char buf[128];
     snprintf(buf, sizeof(buf), "USTAW [%s] = %d\n", nazwa_semafora(nr), val);
     sem_log_write(buf);
 }
 
-void semafor_p(int sem_id, int nr) {
+int semafor_p(int sem_id, int nr) {
     if (nr != SEMAFOR_ZAPIS) {
         char buf[128];
         snprintf(buf, sizeof(buf), "P [%s] (PID %d)\n", nazwa_semafora(nr), getpid());
@@ -363,17 +348,34 @@ void semafor_p(int sem_id, int nr) {
 
     struct sembuf op = { .sem_num = nr, .sem_op = -1, .sem_flg = SEM_UNDO };
     while (semop(sem_id, &op, 1) == -1) {
-        if (errno == EINTR) continue;
+        if (errno == EINTR) {
+            if (g_zakoncz_prace || g_zakoncz_przyjmowanie || g_odjedz_niepelna) {
+                return 0;  
+            }
+            continue;
+        }
+        if (errno == EIDRM || errno == EINVAL) {
+            return 0;
+        }
         perror("semop P");
-        exit(EXIT_FAILURE);
+        return 0;
     }
+    return 1;
 }
 
 void semafor_v(int sem_id, int nr) {
+    int current_val = semctl(sem_id, nr, GETVAL);
+    if (current_val >= 30000) {
+        return; 
+    }
+    
     struct sembuf op = { .sem_num = nr, .sem_op = 1, .sem_flg = SEM_UNDO };
     if (semop(sem_id, &op, 1) == -1) {
+        if (errno == EIDRM || errno == EINVAL || errno == ERANGE) {
+            return;
+        }
         perror("semop V");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     if (nr != SEMAFOR_ZAPIS) {
@@ -384,13 +386,12 @@ void semafor_v(int sem_id, int nr) {
 }
 
 //GENERATORY
-// Generuje pojedynczą paczkę o podanym ID
-Paczka generuj_pojedyncza_paczke(int id) {
+static Paczka generuj_paczke_base(int id) {
     Paczka p;
     p.id = id;
     
-    int typ_rand = rand() % 3;
-    switch (typ_rand) {
+    int typ = rand() % 3;
+    switch (typ) {
         case 0:
             p.typ = A;
             p.objetosc = VOL_A;
@@ -408,51 +409,36 @@ Paczka generuj_pojedyncza_paczke(int id) {
             break;
     }
     p.waga = round(p.waga * 1000) / 1000.0;
-    p.priorytet = (rand() % 100 < g_config.procent_ekspres) ? EXPRES : ZWYKLA;
-    char buf[256];
+    return p;
+}
 
-    snprintf(buf, sizeof(buf),"Paczka %d | Typ: %s | Objetosc: %lf | Waga: %lf\n",p.id,p.priorytet == EXPRES ? "EKSPRES" : "zwykla",p.objetosc, p.waga);
+Paczka generuj_paczke_zwykla(int id) {
+    Paczka p = generuj_paczke_base(id);
+    p.priorytet = ZWYKLA;
+    
+    char buf[256];
+    snprintf(buf, sizeof(buf), "Paczka %d | Typ: ZWYKLA | Rozmiar: %s | Waga: %.3f kg\n",
+             p.id, nazwa_typu(p.typ), p.waga);
     log_write(buf);
     return p;
 }
 
-// Generuje początkowy zestaw paczek
-Paczka* generuj_paczke_poczatkowe(int *liczba_paczek_out, int *nastepne_id) {
-    int liczba_paczek = g_config.liczba_paczek_start;
+Paczka generuj_paczke_ekspres(int id) {
+    Paczka p = generuj_paczke_base(id);
+    p.priorytet = EXPRES;
     
-    Paczka *magazyn = (Paczka*)malloc(liczba_paczek * sizeof(Paczka));
-    if (!magazyn) {
-        perror("malloc magazyn");
-        return NULL;
-    }
-    
-    if (liczba_paczek_out) {
-        *liczba_paczek_out = liczba_paczek;
-    }
-    
-    int ekspresowe = 0;
-    
-    for (int i = 0; i < liczba_paczek; i++) {
-        magazyn[i] = generuj_pojedyncza_paczke(i + 1);
-        if (magazyn[i].priorytet == EXPRES) ekspresowe++;
-    }
-    
-    if (nastepne_id) {
-        *nastepne_id = liczba_paczek + 1;
-    }
-
     char buf[256];
-    snprintf(buf, sizeof(buf),"\n-------------GENEROWANIE PACZEK-------------\n");
+    snprintf(buf, sizeof(buf), "Paczka %d | Typ: EKSPRES | Rozmiar: %s | Waga: %.3f kg\n",
+             p.id, nazwa_typu(p.typ), p.waga);
     log_write(buf);
-    snprintf(buf, sizeof(buf),"Wygenerowano %d paczek poczatkowych\n", liczba_paczek);
-    log_write(buf);
-    snprintf(buf, sizeof(buf),"W tym ekspresowych: %d\n", ekspresowe);
-    log_write(buf);
-    snprintf(buf, sizeof(buf),"Generowanie dynamiczne: AKTYWNE (co %d sekund, %d paczek)\n\n", 
-         g_config.interwal_generowania, g_config.paczek_na_ture);
-    log_write(buf);
+    return p;
+}
 
-    return magazyn;
+int pobierz_nastepne_id(int semafor, LicznikId *licznik) {
+    semafor_p(semafor, SEMAFOR_ID_COUNTER);
+    int id = licznik->nastepne_id++;
+    semafor_v(semafor, SEMAFOR_ID_COUNTER);
+    return id;
 }
 
 void generuj_tasme(Tasma* tasma) {
@@ -510,4 +496,49 @@ Ciezarowka* generuj_ciezarowke(int *liczba_ciezarowek_out) {
     log_write(buf);
 
     return ciezarowki;
+}
+
+//Kolejki komunikatow
+int utworz_kolejke(void) {
+    key_t klucz = ftok(".", 'Q');
+    if (klucz == -1) return -1;
+    return msgget(klucz, IPC_CREAT | 0600);
+}
+
+void usun_kolejke(int msgid) {
+    if (msgid != -1) msgctl(msgid, IPC_RMID, NULL);
+}
+
+int wyslij_msg_ciezarowka(int msgid, pid_t pid) {
+    MsgCiezarowkaPrzyTasmie msg = { .mtype = MSG_CIEZAROWKA_PRZY_TASMIE, .ciezarowka_pid = pid };
+    return msgsnd(msgid, &msg, sizeof(msg) - sizeof(long), 0) == 0 ? 1 : 0;
+}
+
+int wyslij_msg_odpowiedz(int msgid, int wszystko, int zostalo) {
+    MsgP4Odpowiedz msg = { .mtype = MSG_P4_ODPOWIEDZ, .odebrano_wszystko = wszystko, .ile_zostalo = zostalo };
+    return msgsnd(msgid, &msg, sizeof(msg) - sizeof(long), 0) == 0 ? 1 : 0;
+}
+
+int odbierz_msg_ciezarowka(int msgid, MsgCiezarowkaPrzyTasmie *msg) {
+    while (1) {
+        if (msgrcv(msgid, msg, sizeof(*msg) - sizeof(long), MSG_CIEZAROWKA_PRZY_TASMIE, 0) != -1)
+            return 1;
+        if (errno == EINTR) {
+            if (g_zakoncz_prace || g_zakoncz_przyjmowanie) return 0;
+            continue;
+        }
+        return 0;
+    }
+}
+
+int odbierz_msg_odpowiedz(int msgid, MsgP4Odpowiedz *msg) {
+    while (1) {
+        if (msgrcv(msgid, msg, sizeof(*msg) - sizeof(long), MSG_P4_ODPOWIEDZ, 0) != -1)
+            return 1;
+        if (errno == EINTR) {
+            if (g_zakoncz_prace || g_zakoncz_przyjmowanie) return 0;
+            continue;
+        }
+        return 0;
+    }
 }
