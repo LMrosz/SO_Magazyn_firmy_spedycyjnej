@@ -65,17 +65,18 @@ int main(int argc, char *argv[]) {
   alarm(g_interwal);
 
   while (!g_zakoncz_prace) {
-    pause();
+    while (!g_alarm_fired && !g_zakoncz_prace) {
+      pause();
+    }
+
+    if (g_zakoncz_prace) {
+      break;
+    }
 
     if (!licznik->generowanie_aktywne) {
       snprintf(buf, sizeof(buf), "P%d: Generowanie wylaczone - koncze\n", id);
       log_write(buf);
       break;
-    }
-
-    if (!g_alarm_fired) {
-      alarm(g_interwal);
-      continue;
     }
 
     g_alarm_fired = 0;
@@ -107,14 +108,37 @@ int main(int argc, char *argv[]) {
           break;
         }
 
+        if (p.waga > tasma->max_waga) {
+          semafor_v(sem, SEMAFOR_TASMA);
+          semafor_v(sem, SEMAFOR_WOLNE_MIEJSCA);
+
+          snprintf(buf, sizeof(buf),
+                   "P%d: Paczka ID=%d za ciezka dla tasmy (%.3f > %d) - "
+                   "odrzucam\n",
+                   id, p.id, p.waga, tasma->max_waga);
+          log_write(buf);
+          paczka_polozono = 1;
+          continue;
+        }
+
         if (tasma->aktualna_waga + p.waga > tasma->max_waga) {
           semafor_v(sem, SEMAFOR_TASMA);
           semafor_v(sem, SEMAFOR_WOLNE_MIEJSCA);
 
-          snprintf(buf, sizeof(buf),"P%d: Paczka ID=%d za ciezka (%.3f + %.3f > %d), czekam...\n", id,p.id, tasma->aktualna_waga, p.waga, tasma->max_waga);
+          snprintf(buf, sizeof(buf),
+                   "P%d: Brak wagi na tasmie dla ID=%d (%.3f + %.3f > %d) - czekam na zwolnienie wagi\n",
+                   id, p.id, tasma->aktualna_waga, p.waga, tasma->max_waga);
           log_write(buf);
 
-          //usleep(100000); 
+          if (!semafor_p(sem, SEMAFOR_WAGA_DOSTEPNA)) {
+            if (g_zakoncz_prace) {
+              break;
+            }
+            continue;
+          }
+          snprintf(buf, sizeof(buf),
+                   "P%d: Zwolniono wage na tasmie - ponawiam probe\n", id);
+          log_write(buf);
           continue;
         }
 

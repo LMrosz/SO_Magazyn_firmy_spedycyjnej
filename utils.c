@@ -278,6 +278,7 @@ static const char* nazwa_semafora(int nr) {
         case SEMAFOR_ZAPIS: return "ZAPIS";
         case SEMAFOR_EXPRESS: return "EXPRESS";
         case SEMAFOR_ID_COUNTER: return "ID_COUNTER";
+        case SEMAFOR_WAGA_DOSTEPNA: return "WAGA_DOSTEPNA";
         default: return "?";
     }
 }

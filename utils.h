@@ -57,7 +57,8 @@
 #define SEMAFOR_ZAPIS 4             // mutex - zapis do logow
 #define SEMAFOR_EXPRESS 5           // mutex - okienko ekspresowe
 #define SEMAFOR_ID_COUNTER 6        // mutex - licznik ID paczek
-#define LICZBA_SEMAFOROW 7
+#define SEMAFOR_WAGA_DOSTEPNA 7     // licznik - zwalniana waga na tasmie
+#define LICZBA_SEMAFOROW 8
 
 // KOLEJKI KOMUNIKATOW - P4 - Ciezarowka
 #define MSG_P4_DOSTAWA_GOTOWA     10  // P4 -> ciezarowka: mam paczki do dostarczenia

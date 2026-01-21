@@ -1,7 +1,34 @@
 #include "utils.h"
 
+static int wyslij_msg(int kolejka, const void *msg, size_t size, const char *errlog) {
+    while (msgsnd(kolejka, msg, size, 0) == -1) {
+        if (errno == EINTR)
+            continue;
+        if (errno == EIDRM || errno == EINVAL) {
+            log_write("Ciezarowka: kolejka usunieta - koncze\n");
+            g_zakoncz_prace = 1;
+            return 0;
+        }
+        if (errlog)
+            log_error(errlog);
+        return 0;
+    }
+    return 1;
+}
+
 static int sprawdz_dostawa_express(int kolejka, MsgP4Dostawa *msg) {
-    ssize_t ret = msgrcv(kolejka, msg, sizeof(*msg) - sizeof(long), MSG_P4_DOSTAWA_GOTOWA, IPC_NOWAIT);
+    struct msqid_ds info;
+    if (msgctl(kolejka, IPC_STAT, &info) == -1) {
+        if (errno == EIDRM || errno == EINVAL) {
+            g_zakoncz_prace = 1;
+        }
+        return 0;
+    }
+    if (info.msg_qnum == 0) {
+        return 0;
+    }
+    ssize_t ret = msgrcv(kolejka, msg, sizeof(*msg) - sizeof(long),
+                         MSG_P4_DOSTAWA_GOTOWA, 0);
     return (ret != -1) ? 1 : 0;
 }
 
@@ -62,7 +89,9 @@ static int odbierz_express(int sem, OkienkoEkspresShm *okienko, int kolejka, dou
         .ile_zostalo = nieodebrane,
         .pojemnosc_wolna = (int)((max_waga - *waga) / 25.0)
     };
-    msgsnd(kolejka, &msg_potw, sizeof(msg_potw) - sizeof(long), IPC_NOWAIT);
+    if (!wyslij_msg(kolejka, &msg_potw, sizeof(msg_potw) - sizeof(long),
+                    "Ciezarowka: blad wysylania potwierdzenia\n"))
+        return 0;
 
     snprintf(buf, 256, "Ciezarowka %d: Odebrano %d EXPRESS, zostalo: %d\n", id, odebrane, nieodebrane);
     log_write(buf);
@@ -116,11 +145,8 @@ int main(int argc, char *argv[]) {
     log_write(buf);
 
     while (!g_zakoncz_prace && !g_zakoncz_przyjmowanie) {
-        int ma_stanowisko = 0;
-
         if (!semafor_p(sem, SEMAFOR_CIEZAROWKI))
             break;
-        ma_stanowisko = 1;
 
         if (g_zakoncz_prace || g_zakoncz_przyjmowanie) {
             semafor_v(sem, SEMAFOR_CIEZAROWKI);
@@ -149,28 +175,15 @@ int main(int argc, char *argv[]) {
                     .mtype = MSG_CIEZAROWKA_GOTOWA,
                     .pojemnosc_wolna = (int)((max_waga - waga) / 25.0)
                 };
-                msgsnd(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long), 0);
+                if (!wyslij_msg(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long),
+                                "Ciezarowka: blad wysylania gotowosci\n"))
+                    break;
 
-                if (ma_stanowisko) {
-                    semafor_p(sem, SEMAFOR_TASMA);
-                    tasma->ciezarowka = 0;
-                    semafor_v(sem, SEMAFOR_TASMA);
-                    semafor_v(sem, SEMAFOR_CIEZAROWKI);
-                    ma_stanowisko = 0;
-                }
-
-                int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc,&liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
+                int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc,
+                                            &liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
                 if (wynik == -1) {
                     pelna = 1;
                     break;
-                }
-                if (!g_zakoncz_prace && !g_zakoncz_przyjmowanie && !g_odjedz_niepelna && !pelna && !ma_stanowisko) {
-                    if (!semafor_p(sem, SEMAFOR_CIEZAROWKI))
-                        break;
-                    ma_stanowisko = 1;
-                    semafor_p(sem, SEMAFOR_TASMA);
-                    tasma->ciezarowka = getpid();
-                    semafor_v(sem, SEMAFOR_TASMA);
                 }
                 continue;
             }
@@ -180,73 +193,19 @@ int main(int argc, char *argv[]) {
                     .mtype = MSG_CIEZAROWKA_GOTOWA,
                     .pojemnosc_wolna = (int)((max_waga - waga) / 25.0)
                 };
-                msgsnd(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long), 0);
+                if (!wyslij_msg(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long),
+                                "Ciezarowka: blad wysylania gotowosci\n"))
+                    break;
 
-                if (ma_stanowisko) {
-                    semafor_p(sem, SEMAFOR_TASMA);
-                    tasma->ciezarowka = 0;
-                    semafor_v(sem, SEMAFOR_TASMA);
-                    semafor_v(sem, SEMAFOR_CIEZAROWKI);
-                    ma_stanowisko = 0;
-                }
-
-                int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc,&liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
+                int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc,
+                                            &liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
                 if (wynik == -1) {
                     pelna = 1;
-                }
-                if (!g_zakoncz_prace && !g_zakoncz_przyjmowanie && !g_odjedz_niepelna && !pelna && !ma_stanowisko) {
-                    if (!semafor_p(sem, SEMAFOR_CIEZAROWKI))
-                        break;
-                    ma_stanowisko = 1;
-                    semafor_p(sem, SEMAFOR_TASMA);
-                    tasma->ciezarowka = getpid();
-                    semafor_v(sem, SEMAFOR_TASMA);
                 }
                 continue;
             }
 
-            struct sembuf op_nowait = {
-                .sem_num = SEMAFOR_PACZKI,
-                .sem_op = -1,
-                .sem_flg = SEM_UNDO | IPC_NOWAIT
-            };
-
-            if (semop(sem, &op_nowait, 1) == -1) {
-                if (errno == EAGAIN) {
-                    if (sprawdz_dostawa_express(kolejka, &msg_express)) {
-                        MsgPotwierdzenie msg_gotowa = {
-                            .mtype = MSG_CIEZAROWKA_GOTOWA,
-                            .pojemnosc_wolna = (int)((max_waga - waga) / 25.0)
-                        };
-                        msgsnd(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long), 0);
-
-                        if (ma_stanowisko) {
-                            semafor_p(sem, SEMAFOR_TASMA);
-                            tasma->ciezarowka = 0;
-                            semafor_v(sem, SEMAFOR_TASMA);
-                            semafor_v(sem, SEMAFOR_CIEZAROWKI);
-                            ma_stanowisko = 0;
-                        }
-
-                        int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc,
-                                                    &liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
-                        if (wynik == -1) {
-                            pelna = 1;
-                            break;
-                        }
-                        if (!g_zakoncz_prace && !g_zakoncz_przyjmowanie && !g_odjedz_niepelna && !pelna && !ma_stanowisko) {
-                            if (!semafor_p(sem, SEMAFOR_CIEZAROWKI))
-                                break;
-                            ma_stanowisko = 1;
-                            semafor_p(sem, SEMAFOR_TASMA);
-                            tasma->ciezarowka = getpid();
-                            semafor_v(sem, SEMAFOR_TASMA);
-                        }
-                    } else {
-                        //usleep(10000); 
-                    }
-                    continue;
-                }
+            if (!semafor_p(sem, SEMAFOR_PACZKI)) {
                 if (g_zakoncz_prace || g_zakoncz_przyjmowanie || g_odjedz_niepelna)
                     break;
                 continue;
@@ -264,29 +223,15 @@ int main(int argc, char *argv[]) {
                     .mtype = MSG_CIEZAROWKA_GOTOWA,
                     .pojemnosc_wolna = (int)((max_waga - waga) / 25.0)
                 };
-                msgsnd(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long), 0);
-
-                if (ma_stanowisko) {
-                    semafor_p(sem, SEMAFOR_TASMA);
-                    tasma->ciezarowka = 0;
-                    semafor_v(sem, SEMAFOR_TASMA);
-                    semafor_v(sem, SEMAFOR_CIEZAROWKI);
-                    ma_stanowisko = 0;
-                }
+                if (!wyslij_msg(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long),
+                                "Ciezarowka: blad wysylania gotowosci\n"))
+                    break;
 
                 int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc,
                                             &liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
                 if (wynik == -1) {
                     pelna = 1;
                     break;
-                }
-                if (!g_zakoncz_prace && !g_zakoncz_przyjmowanie && !g_odjedz_niepelna && !pelna && !ma_stanowisko) {
-                    if (!semafor_p(sem, SEMAFOR_CIEZAROWKI))
-                        break;
-                    ma_stanowisko = 1;
-                    semafor_p(sem, SEMAFOR_TASMA);
-                    tasma->ciezarowka = getpid();
-                    semafor_v(sem, SEMAFOR_TASMA);
                 }
                 continue;
             }
@@ -314,6 +259,7 @@ int main(int argc, char *argv[]) {
 
                 semafor_v(sem, SEMAFOR_TASMA);
                 semafor_v(sem, SEMAFOR_WOLNE_MIEJSCA);
+                semafor_v(sem, SEMAFOR_WAGA_DOSTEPNA);
             } else {
                 semafor_v(sem, SEMAFOR_TASMA);
                 semafor_v(sem, SEMAFOR_PACZKI);
@@ -334,13 +280,10 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        if (ma_stanowisko) {
-            semafor_p(sem, SEMAFOR_TASMA);
-            tasma->ciezarowka = 0;
-            semafor_v(sem, SEMAFOR_TASMA);
-            semafor_v(sem, SEMAFOR_CIEZAROWKI);
-            ma_stanowisko = 0;
-        }
+        semafor_p(sem, SEMAFOR_TASMA);
+        tasma->ciezarowka = 0;
+        semafor_v(sem, SEMAFOR_TASMA);
+        semafor_v(sem, SEMAFOR_CIEZAROWKI);
 
         if (liczba_paczek > 0) {
             if (g_odjedz_niepelna) {

@@ -151,7 +151,9 @@ int main(int argc, char *argv[]) {
 
       semafor_v(sem, SEMAFOR_EXPRESS);
 
-      MsgP4Dostawa msg_przekazane = {.mtype = MSG_P4_PACZKI_PRZEKAZANE,.ile_paczek = do_skopiowania,.nadawca_pid = getpid()};
+      MsgP4Dostawa msg_przekazane = {.mtype = MSG_P4_PACZKI_PRZEKAZANE,
+                                     .ile_paczek = do_skopiowania,
+                                     .nadawca_pid = getpid()};
 
       if (msgsnd(kolejka, &msg_przekazane,
                  sizeof(msg_przekazane) - sizeof(long), 0) == -1) {

@@ -56,7 +56,8 @@ void odblokuj_procesy(int liczba_ciezarowek) {
 
 pid_t uruchom_dyspozytora(int shm_tasma, int semafor_id, int kolejka_p4, pid_t p4_pid) {
     char dyspozytor_cmd[512];
-    sprintf(dyspozytor_cmd, "./dyspozytor %d %d %s %d %d", shm_tasma, semafor_id, g_log_dir, kolejka_p4, p4_pid);
+    sprintf(dyspozytor_cmd, "./dyspozytor %d %d %s %d %d", 
+            shm_tasma, semafor_id, g_log_dir, kolejka_p4, p4_pid);
     
     char *tmux_env = getenv("TMUX");
     if (tmux_env != NULL) {
@@ -68,7 +69,7 @@ pid_t uruchom_dyspozytora(int shm_tasma, int semafor_id, int kolejka_p4, pid_t p
             
             pid_t pid = 0;
             for (int i = 0; i < 20 && pid == 0; i++) {
-                //usleep(100000);
+                // usleep(100000);
                 pid = g_tasma->dyspozytor_pid;
             }
             return pid;
@@ -116,6 +117,7 @@ int main(void) {
     ustaw_semafor(g_sem, SEMAFOR_ZAPIS, 1);
     ustaw_semafor(g_sem, SEMAFOR_EXPRESS, 1);
     ustaw_semafor(g_sem, SEMAFOR_ID_COUNTER, 1);
+    ustaw_semafor(g_sem, SEMAFOR_WAGA_DOSTEPNA, 0);
 
     g_kolejka = utworz_kolejke();
     if (g_kolejka == -1) {
@@ -296,7 +298,7 @@ int main(void) {
             int status;
             pid_t result = waitpid(g_dyspozytor_pid, &status, WNOHANG);
             if (result == g_dyspozytor_pid || result == -1) break;
-            //usleep(100000);
+            // usleep(100000);
         }
     }
     
