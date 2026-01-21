@@ -222,3 +222,40 @@ Poniższe testy zawieraja gotowe parametry startowe.
 
 ```
 - **Wynik:** [Zaliczono]
+
+## Linki do kodu (permalinki)
+Poniższe linki prowadzą do konkretnych fragmentów kodu w repozytorium GitHub (stałe linki do commit-a), zgodnie z wymaganiami 5.2.
+
+a. **Tworzenie i obsługa plików (creat(), open(), close(), read(), write(), unlink())**
+- `open()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L151-L155
+- `close()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L159-L162
+- `write()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L176-L180
+
+b. **Tworzenie procesów (fork(), exec(), exit(), wait())**
+- `fork()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L79
+- `exec()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L86
+- `exit()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L88
+
+c. **Obsługa sygnałów (kill(), raise(), signal(), sigaction())**
+- `kill()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/dyspozytor.c#L39-L41
+- `signal()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L104-L105
+
+d. **Synchronizacja procesów (ftok(), semget(), semctl(), semop())**
+- `ftok()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L469
+- `semget()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L286-L288
+- `semctl()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L295-L304
+- `semop()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L316-L334
+
+e. **Segmenty pamięci dzielonej (ftok(), shmget(), shmat(), shmdt(), shmctl())**
+- `shmget()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L151
+- `shmat()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L152-L155
+- `shmdt()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L23-L25
+- `shmctl()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L26-L28
+
+f. **Kolejki komunikatów (ftok(), msgget(), msgsnd(), msgrcv(), msgctl())**
+- `ftok()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L469
+- `msgget()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L474
+- `msgsnd()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/ciezarowki.c#L3-L4
+- `msgrcv()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/ciezarowki.c#L30-L31
+- `msgctl()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L481-L483
+
