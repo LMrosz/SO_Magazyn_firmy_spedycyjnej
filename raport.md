@@ -16,6 +16,11 @@
 make clean && make
 ```
 
+### Obsluga panelu tmux
+Aby poruszac sie miedzy dwoma terminalami w tmux'ie nalezy wcisnac Ctrl + B i nastepnie strzałka w lewo badz prawo, by przewiąć terminal gora / dol Ctrl + B i nastepnie Pg Up lub Pg Dn. Przy kazdej pojedynczej operacji przejscia nalezy wcisnac Ctrl + B.
+
+Gdy wykona sie Ctrl + Z w terminalu procesu glownego (magazyn) na koncu, aby wyjsc z tmux'a nalezy wpisac exit.
+
 ### Aby rozpocząć symulację, w katalogu projektu należy wykonać polecenie:
 ```bash
 chmod 711 run.sh
@@ -90,8 +95,7 @@ PETLA az odbior calego pakietu:
   czekaj na potwierdzenie odebrania
 ```
 
-## Elementy wyroziajace
-- **Synchronizacja logow**: wpisy nie nakladaja sie dzieki blokowaniu sekcji wyjscia.
+## Elementy wyrozniajace 
 - **Kolorowanie logow**: dzieki zastosowaniu kolorowania logow podczas dzialania programu, zwieksza sie ich czytelnosc. 
 - **Sterowanie sygnalami w panelu tmux**: zewnetrzne sterowanie odjazdem dostawa EXPRESS oraz zakonczenie dzialania programu dzieki uzyciu tmux.
 
@@ -227,35 +231,35 @@ Poniższe testy zawieraja gotowe parametry startowe.
 Poniższe linki prowadzą do konkretnych fragmentów kodu w repozytorium GitHub (stałe linki do commit-a), zgodnie z wymaganiami 5.2.
 
 a. **Tworzenie i obsługa plików (creat(), open(), close(), read(), write(), unlink())**
-- `open()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L151-L155
-- `close()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L159-L162
-- `write()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L176-L180
+- `open()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/utils.c#L129
+- `close()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/utils.c#L137
+- `write()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/utils.c#L155
 
 b. **Tworzenie procesów (fork(), exec(), exit(), wait())**
-- `fork()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L79
-- `exec()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L86
-- `exit()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L88
+- `fork()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/magazyn.c#L200
+- `exec()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/magazyn.c#L204
+- `exit()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/magazyn.c#L206
+- `waitpid()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/magazyn.c#L286
 
 c. **Obsługa sygnałów (kill(), raise(), signal(), sigaction())**
-- `kill()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/dyspozytor.c#L39-L41
-- `signal()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L104-L105
+- `kill()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/magazyn.c#L285
+- `signal()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/utils.c#L236
 
 d. **Synchronizacja procesów (ftok(), semget(), semctl(), semop())**
-- `ftok()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L469
-- `semget()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L286-L288
-- `semctl()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L295-L304
-- `semop()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L316-L334
+- `semget()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/utils.c#L263
+- `semctl()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/utils.c#L272
+- `semop()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/utils.c#L293
 
 e. **Segmenty pamięci dzielonej (ftok(), shmget(), shmat(), shmdt(), shmctl())**
-- `shmget()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L151
-- `shmat()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L152-L155
-- `shmdt()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L23-L25
-- `shmctl()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/magazyn.c#L26-L28
+- `shmget()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/magazyn.c#L153
+- `shmat()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/pracownicy.c#L45
+- `shmdt()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/pracownicy.c#L157
+- `shmctl()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/magazyn.c#L26
 
 f. **Kolejki komunikatów (ftok(), msgget(), msgsnd(), msgrcv(), msgctl())**
-- `ftok()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L469
-- `msgget()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L474
-- `msgsnd()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/ciezarowki.c#L3-L4
-- `msgrcv()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/ciezarowki.c#L30-L31
-- `msgctl()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/a39612a89577c5096e968ce77c25e21304d9773a/utils.c#L481-L483
+- `ftok()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/utils.c#L447
+- `msgget()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/utils.c#L450
+- `msgsnd()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/pracownik4.c#L90
+- `msgrcv()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/ciezarowki.c#L30
+- `msgctl()` — https://github.com/LMrosz/SO_Magazyn_firmy_spedycyjnej/blob/b567a363cb761ad1350dd8d3e8971f12821cbca3/utils.c#L459
 
