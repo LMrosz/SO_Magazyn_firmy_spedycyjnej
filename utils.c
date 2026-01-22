@@ -66,49 +66,25 @@ void konfiguruj_symulacje(void) {
     printf("                      PACZKI\n");
     printf("------------------------------------------------------------\n");
     
-    g_config.paczek_na_ture = pobierz_int(
-        "Liczba paczek generowanych na ture", 
-        DOMYSLNA_PACZEK_NA_TURE, 1, MAX_PACZEK_NA_TURE);
-    
-    g_config.interwal_generowania = pobierz_int(
-        "Interwal generowania paczek (sekundy)", 
-        DOMYSLNY_INTERWAL_GENEROWANIA, 1, 180);
-
-    g_config.paczek_express = pobierz_int(
-        "Liczba paczek w pakiecie EXPRESS", 
-        DOMYSLNA_PACZEK_EXPRESS, 1, 1000);
+    g_config.paczek_na_ture = pobierz_int("Liczba paczek generowanych na ture", DOMYSLNA_PACZEK_NA_TURE, 1, MAX_PACZEK_NA_TURE); 
+    g_config.interwal_generowania = pobierz_int( "Interwal generowania paczek (sekundy)", DOMYSLNY_INTERWAL_GENEROWANIA, 1, 180);
+    g_config.paczek_express = pobierz_int("Liczba paczek w pakiecie EXPRESS", DOMYSLNA_PACZEK_EXPRESS, 1, 1000);
     
     printf("\n------------------------------------------------------------\n");
     printf("                     CIEZAROWKI\n");
     printf("------------------------------------------------------------\n");
     
-    g_config.liczba_ciezarowek = pobierz_int(
-        "Liczba ciezarowek", 
-        DOMYSLNA_LICZBA_CIEZAROWEK, 1, MAX_CIEZAROWEK);
-    
-    g_config.waga_ciezarowek = pobierz_int(
-        "Ladownosc ciezarowki (kg)", 
-        DOMYSLNA_WAGA_CIEZAROWEK, 25, 25000);
-    
-    g_config.pojemnosc_ciezarowek = pobierz_int(
-        "Pojemnosc ciezarowki (m3)", 
-        DOMYSLNA_POJEMNOSC_CIEZAROWEK, 1, 100);
-    
-    g_config.czas_rozwozu = pobierz_int(
-        "Czas rozwozu (sekundy)", 
-        DOMYSLNY_CZAS_ROZWOZU, 1, 6000);
+    g_config.liczba_ciezarowek = pobierz_int("Liczba ciezarowek", DOMYSLNA_LICZBA_CIEZAROWEK, 1, MAX_CIEZAROWEK);
+    g_config.waga_ciezarowek = pobierz_int("Ladownosc ciezarowki (kg)", DOMYSLNA_WAGA_CIEZAROWEK, 25, 25000);
+    g_config.pojemnosc_ciezarowek = pobierz_int("Pojemnosc ciezarowki (m3)", DOMYSLNA_POJEMNOSC_CIEZAROWEK, 1, 100);
+    g_config.czas_rozwozu = pobierz_int("Czas rozwozu (sekundy)", DOMYSLNY_CZAS_ROZWOZU, 1, 6000);
     
     printf("\n------------------------------------------------------------\n");
     printf("                       TASMA\n");
     printf("------------------------------------------------------------\n");
     
-    g_config.pojemnosc_tasmy = pobierz_int(
-        "Pojemnosc tasmy (liczba paczek)", 
-        DOMYSLNA_POJEMNOSC_TASMY, 1, MAX_POJEMNOSC_TASMY);
-  
-    g_config.waga_tasmy = pobierz_int(
-        "Maksymalna waga na tasmie (kg)", 
-        DOMYSLNA_WAGA_TASMY, 25, 10000); 
+    g_config.pojemnosc_tasmy = pobierz_int("Pojemnosc tasmy (liczba paczek)", DOMYSLNA_POJEMNOSC_TASMY, 1, MAX_POJEMNOSC_TASMY);
+    g_config.waga_tasmy = pobierz_int("Maksymalna waga na tasmie (kg)", DOMYSLNA_WAGA_TASMY, 25, 10000); 
     
     printf("\n============================================================\n");
     printf("                 PODSUMOWANIE KONFIGURACJI\n");

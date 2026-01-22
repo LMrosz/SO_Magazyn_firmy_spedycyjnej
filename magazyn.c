@@ -69,7 +69,7 @@ pid_t uruchom_dyspozytora(int shm_tasma, int semafor_id, int kolejka_p4, pid_t p
             
             pid_t pid = 0;
             for (int i = 0; i < 20 && pid == 0; i++) {
-                // usleep(100000);
+                usleep(100000);
                 pid = g_tasma->dyspozytor_pid;
             }
             return pid;
@@ -85,6 +85,9 @@ pid_t uruchom_dyspozytora(int shm_tasma, int semafor_id, int kolejka_p4, pid_t p
         sprintf(arg4, "%d", p4_pid);
         execl("./dyspozytor", "dyspozytor", arg1, arg2, g_log_dir, arg3, arg4, NULL);
         perror("execl dyspozytor");
+        exit(1);
+    } else if (pid ==-1){
+        cleanup();
         exit(1);
     }
     return pid;
@@ -127,7 +130,6 @@ int main(void) {
     }
 
     log_init(g_sem, "magazyn.log", COL_GREEN);
-    sem_log_init();
     log_write("=== SYMULACJA MAGAZYNU ===\n");
     
     char buf[512];
@@ -182,14 +184,16 @@ int main(void) {
         if (pid == 0) {
             sprintf(arg_id, "%d", i + 1);
             sprintf(arg_paczki, "%d", g_config.paczek_na_ture);
-            execl("./pracownicy", "pracownicy", arg_id, arg_sem, arg_tasma, arg_okienko,
-                  g_log_dir, arg_kolejka, arg_paczki, arg_interwal, arg_licznik, NULL);
+            execl("./pracownicy", "pracownicy", arg_id, arg_sem, arg_tasma, arg_okienko, g_log_dir, arg_kolejka, arg_paczki, arg_interwal, arg_licznik, NULL);
             perror("execl pracownicy");
             exit(1);
         } else if (pid > 0) {
             g_pracownicy_pids[i] = pid;
             snprintf(buf, sizeof(buf), "Uruchomiono P%d (PID %d)\n", i + 1, pid);
             log_write(buf);
+        } else {
+            cleanup();
+            exit(2);
         }
     }
     {
@@ -197,14 +201,16 @@ int main(void) {
         if (pid == 0) {
             sprintf(arg_id, "4");
             sprintf(arg_paczki, "%d", g_config.paczek_express);
-            execl("./pracownik4", "pracownik4", arg_id, arg_sem, arg_tasma, arg_okienko,
-                  g_log_dir, arg_kolejka, arg_paczki, arg_interwal, arg_licznik, NULL);
+            execl("./pracownik4", "pracownik4", arg_id, arg_sem, arg_tasma, arg_okienko, g_log_dir, arg_kolejka, arg_paczki, arg_interwal, arg_licznik, NULL);
             perror("execl pracownik4");
             exit(1);
         } else if (pid > 0) {
             g_pracownicy_pids[3] = pid;
             snprintf(buf, sizeof(buf), "Uruchomiono P4 (PID %d) - EXPRESS\n", pid);
             log_write(buf);
+        } else {
+            cleanup();
+            exit(3);
         }
     }
     
@@ -215,11 +221,13 @@ int main(void) {
             sprintf(arg_waga, "%d", ciezarowki[i].waga_ciezarowki);
             sprintf(arg_poj, "%d", ciezarowki[i].pojemnosc_ciezarowki);
             sprintf(arg_czas, "%ld", ciezarowki[i].czas_rozwozu);
-            execl("./ciezarowki", "ciezarowki", arg_id, arg_tasma, arg_sem,
-                  arg_waga, arg_poj, arg_czas, arg_okienko, g_log_dir, arg_kolejka, NULL);
+            execl("./ciezarowki", "ciezarowki", arg_id, arg_tasma, arg_sem, arg_waga, arg_poj, arg_czas, arg_okienko, g_log_dir, arg_kolejka, NULL);
             exit(1);
         } else if (pid > 0) {
             g_ciezarowki_pids[i] = pid;
+        } else {
+            cleanup();
+            exit(4);
         }
     }
 
@@ -289,7 +297,6 @@ int main(void) {
         }
     }
     log_write("Wszystkie ciezarowki wrocily do magazynu.\n");
-    
     log_write("Wszyscy pracownicy i ciezarowki zakonczone.\n");
     free(ciezarowki);
     
@@ -298,7 +305,7 @@ int main(void) {
             int status;
             pid_t result = waitpid(g_dyspozytor_pid, &status, WNOHANG);
             if (result == g_dyspozytor_pid || result == -1) break;
-            // usleep(100000);
+            usleep(100000);
         }
     }
     

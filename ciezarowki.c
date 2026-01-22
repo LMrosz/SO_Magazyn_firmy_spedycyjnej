@@ -59,9 +59,12 @@ static int odbierz_express(int sem, OkienkoEkspresShm *okienko, int kolejka, dou
     int nieodebrane = 0;
 
     while (okienko->ilosc > 0) {
-        Paczka p = okienko->paczki[okienko->ilosc - 1];
+        Paczka p = okienko->paczki[0];
 
         if (*waga + p.waga <= max_waga && *pojemnosc + p.objetosc <= max_pojemnosc) {
+            for (int k = 0; k < okienko->ilosc - 1; k++) {
+                okienko->paczki[k] = okienko->paczki[k + 1];
+            }
             okienko->ilosc--;
             *waga += p.waga;
             *pojemnosc += p.objetosc;
@@ -175,12 +178,10 @@ int main(int argc, char *argv[]) {
                     .mtype = MSG_CIEZAROWKA_GOTOWA,
                     .pojemnosc_wolna = (int)((max_waga - waga) / 25.0)
                 };
-                if (!wyslij_msg(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long),
-                                "Ciezarowka: blad wysylania gotowosci\n"))
+                if (!wyslij_msg(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long),"Ciezarowka: blad wysylania gotowosci\n"))
                     break;
 
-                int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc,
-                                            &liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
+                int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc, &liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
                 if (wynik == -1) {
                     pelna = 1;
                     break;
@@ -193,12 +194,10 @@ int main(int argc, char *argv[]) {
                     .mtype = MSG_CIEZAROWKA_GOTOWA,
                     .pojemnosc_wolna = (int)((max_waga - waga) / 25.0)
                 };
-                if (!wyslij_msg(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long),
-                                "Ciezarowka: blad wysylania gotowosci\n"))
+                if (!wyslij_msg(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long), "Ciezarowka: blad wysylania gotowosci\n"))
                     break;
 
-                int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc,
-                                            &liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
+                int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc, &liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
                 if (wynik == -1) {
                     pelna = 1;
                 }
@@ -223,12 +222,10 @@ int main(int argc, char *argv[]) {
                     .mtype = MSG_CIEZAROWKA_GOTOWA,
                     .pojemnosc_wolna = (int)((max_waga - waga) / 25.0)
                 };
-                if (!wyslij_msg(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long),
-                                "Ciezarowka: blad wysylania gotowosci\n"))
+                if (!wyslij_msg(kolejka, &msg_gotowa, sizeof(msg_gotowa) - sizeof(long), "Ciezarowka: blad wysylania gotowosci\n"))
                     break;
 
-                int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc,
-                                            &liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
+                int wynik = odbierz_express(sem, okienko, kolejka, &waga, &pojemnosc, &liczba_paczek, &ekspres, max_waga, max_pojemnosc, id, buf);
                 if (wynik == -1) {
                     pelna = 1;
                     break;
@@ -264,7 +261,6 @@ int main(int argc, char *argv[]) {
                 semafor_v(sem, SEMAFOR_TASMA);
                 semafor_v(sem, SEMAFOR_PACZKI);
 
-                // Okresl powod pelnosci
                 if (waga + paczka.waga > max_waga) {
                     snprintf(buf, sizeof(buf), "Ciezarowka %d: PELNA - przekroczenie wagi (%.3f + %.3f > %d kg)\n", id, waga, paczka.waga, max_waga);
                 } else {
@@ -299,10 +295,10 @@ int main(int argc, char *argv[]) {
             log_write(buf);
 
             // Zakomentowac (jesli chce sie uruchomic bez sleepow)
-            // time_t czas = czas_rozwozu;
-            // while (czas > 0) {
-            //     czas = sleep(czas);
-            // }
+            time_t czas = czas_rozwozu;
+            while (czas > 0) {
+                czas = sleep(czas);
+            }
             // Koniec komentarza (do uruchomienia bez sleepow)
 
             snprintf(buf, sizeof(buf), "Ciezarowka %d: Zakonczyla rozwoz paczek\n", id);

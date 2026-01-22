@@ -15,10 +15,7 @@ int main(int argc, char *argv[]) {
   srand(time(NULL) ^ getpid());
 
   if (argc < 10) {
-    fprintf(stderr,
-            "Uzycie: %s id sem shm_tasma shm_okienko log_dir kolejka paczki "
-            "interwal shm_licznik\n",
-            argv[0]);
+    fprintf(stderr,"Uzycie: %s id sem shm_tasma shm_okienko log_dir kolejka paczki interwal shm_licznik\n",argv[0]);
     return 1;
   }
 
@@ -112,10 +109,7 @@ int main(int argc, char *argv[]) {
           semafor_v(sem, SEMAFOR_TASMA);
           semafor_v(sem, SEMAFOR_WOLNE_MIEJSCA);
 
-          snprintf(buf, sizeof(buf),
-                   "P%d: Paczka ID=%d za ciezka dla tasmy (%.3f > %d) - "
-                   "odrzucam\n",
-                   id, p.id, p.waga, tasma->max_waga);
+          snprintf(buf, sizeof(buf),"P%d: Paczka ID=%d za ciezka dla tasmy (%.3f > %d) - ""odrzucam\n", id, p.id, p.waga, tasma->max_waga);
           log_write(buf);
           paczka_polozono = 1;
           continue;
@@ -125,9 +119,7 @@ int main(int argc, char *argv[]) {
           semafor_v(sem, SEMAFOR_TASMA);
           semafor_v(sem, SEMAFOR_WOLNE_MIEJSCA);
 
-          snprintf(buf, sizeof(buf),
-                   "P%d: Brak wagi na tasmie dla ID=%d (%.3f + %.3f > %d) - czekam na zwolnienie wagi\n",
-                   id, p.id, tasma->aktualna_waga, p.waga, tasma->max_waga);
+          snprintf(buf, sizeof(buf),"P%d: Brak wagi na tasmie dla ID=%d (%.3f + %.3f > %d) - czekam na zwolnienie wagi\n",id, p.id, tasma->aktualna_waga, p.waga, tasma->max_waga);
           log_write(buf);
 
           if (!semafor_p(sem, SEMAFOR_WAGA_DOSTEPNA)) {
@@ -136,8 +128,7 @@ int main(int argc, char *argv[]) {
             }
             continue;
           }
-          snprintf(buf, sizeof(buf),
-                   "P%d: Zwolniono wage na tasmie - ponawiam probe\n", id);
+          snprintf(buf, sizeof(buf),"P%d: Zwolniono wage na tasmie - ponawiam probe\n", id);
           log_write(buf);
           continue;
         }
